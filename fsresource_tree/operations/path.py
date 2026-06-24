@@ -6,8 +6,9 @@ from typing import List, Optional, Union
 
 from ..core.directory import Directory
 from ..core.file import File
+import os
 
-_SEPARATOR = "/"
+_SEPARATOR = os.extsep
 
 
 def path(resource: Union[Directory, File]) -> str:
