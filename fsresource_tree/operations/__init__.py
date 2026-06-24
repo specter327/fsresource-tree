@@ -10,5 +10,6 @@ from ..operations.walker import walk
 from ..operations.exists import exists
 from ..operations.create import create
 from ..operations.ancestors import ancestors
+from ..operations.delete import delete
 
-__all__ = ["walk", "path", "find", "exists", "create", "ancestors"]
+__all__ = ["walk", "path", "find", "exists", "create", "ancestors", "delete"]

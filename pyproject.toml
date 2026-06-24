@@ -1,7 +1,7 @@
 [project]
 
 name = "fsresource-tree"
-version = "0.1.10"
+version = "0.1.11"
 
 description = "Filesystem resource tree implementation"
 
