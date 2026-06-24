@@ -7,7 +7,7 @@ en una estructura real del sistema operativo.
 
 from __future__ import annotations
 
-from typing import Union, Iterable
+from typing import Union
 
 from ..core.directory import Directory
 from ..core.file import File
@@ -19,35 +19,24 @@ from ..operations.ancestors import ancestors
 import os
 
 
-# Type definition
 Resource = Union[Directory, File]
 
 
 def _create_single(
     resource: Resource
 ) -> bool:
-    """
-    Crea únicamente el recurso indicado.
-
-    No crea padres.
-    No crea hijos.
-    """
 
     resource_path = path(resource)
 
 
-    # Directory
     if isinstance(resource, Directory):
 
-        if os.path.exists(resource_path):
-            return True
-
-        os.mkdir(resource_path)
+        if not os.path.exists(resource_path):
+            os.mkdir(resource_path)
 
         return True
 
 
-    # File
     if isinstance(resource, File):
 
         parent = os.path.dirname(resource_path)
@@ -57,8 +46,9 @@ def _create_single(
                 f"Parent directory does not exist: {parent}"
             )
 
-        with open(resource_path, "a"):
-            pass
+        if not os.path.exists(resource_path):
+            with open(resource_path, "a"):
+                pass
 
         return True
 
@@ -74,50 +64,12 @@ def create(
     recursive_children: bool = False,
     recursive_parent: bool = False
 ) -> bool:
-    """
-    Crea un recurso físico.
-
-    Args:
-
-        resource:
-            Directory, File o iterable de recursos.
-
-        recursive_children:
-            Crea también todos los descendientes.
-
-        recursive_parent:
-            Crea también todos los padres necesarios.
 
 
-    Examples:
+    # =====================================================
+    # Iterable
+    # =====================================================
 
-
-        create(file)
-
-            /
-            home
-            user
-            file
-
-
-        create(file, recursive_parent=True)
-
-            Crea:
-            /
-            home
-            user
-            file
-
-
-        create(root, recursive_children=True)
-
-            Crea:
-            toda la estructura inferior
-
-    """
-
-
-    # Iterable support
     if (
         hasattr(resource, "__iter__")
         and not isinstance(resource, (Directory, File))
@@ -127,15 +79,18 @@ def create(
 
             create(
                 item,
-                recursive_children=False,
-                recursive_parent=False
+                recursive_children=recursive_children,
+                recursive_parent=recursive_parent
             )
 
         return True
 
 
 
-    # Create parents first
+    # =====================================================
+    # Parents
+    # =====================================================
+
     if recursive_parent:
 
         for parent in ancestors(
@@ -147,25 +102,33 @@ def create(
 
 
 
-    # Create current resource
+    # =====================================================
+    # Current
+    # =====================================================
 
     _create_single(resource)
 
 
 
-    # Create children
+    # =====================================================
+    # Children
+    # =====================================================
 
     if recursive_children:
 
-        for child in walk(
-            resource,
-            inverse=False
-        ):
+        for child in walk(resource):
 
             if child is resource:
                 continue
 
-            _create_single(child)
+
+            # aseguramos que el padre físico exista
+
+            create(
+                child,
+                recursive_parent=False,
+                recursive_children=False
+            )
 
 
     return True
