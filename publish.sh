@@ -124,5 +124,5 @@ python3 -m twine upload dist/*
 echo ""
 echo "================================="
 echo " DONE"
-echo " resourcetree $VERSION published"
+echo " fsresource-tree $VERSION published"
 echo "================================="
