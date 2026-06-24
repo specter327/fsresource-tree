@@ -8,7 +8,7 @@ from ..core.directory import Directory
 from ..core.file import File
 import os
 
-_SEPARATOR = os.extsep
+_SEPARATOR = os.sep
 
 
 def path(resource: Union[Directory, File]) -> str:
