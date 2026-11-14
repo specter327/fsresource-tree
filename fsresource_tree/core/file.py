@@ -1,30 +1,37 @@
-"""File: recurso hoja.
-
-Un File nunca contiene hijos. Incluye `parent` (a diferencia de la
-versión mínima del enunciado) porque las operaciones genéricas (path,
-find) necesitan poder subir por los padres sin importar si el nodo de
-partida es un Directory o un File.
-"""
+"""Filesystem-specific file resource."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from typing import Any
 
-from ..core.directory import Directory
-from ..core.resource import Resource
+from resourcetree import Asset
+
+from .directory import Directory
 
 
-@dataclass(eq=False, repr=False)
-class File(Resource):
-    extension: Optional[str] = None
-    parent: Optional[Directory] = None
+class File(Asset):
+    """A filesystem file modeled as a generic terminal Asset."""
+
+    def __init__(
+        self,
+        name: str,
+        extension: str | None = None,
+        parent: Directory | None = None,
+        uid: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        data: Any = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            parent=parent,
+            uid=uid,
+            data=data,
+            metadata=metadata,
+        )
+        self.extension = extension
 
     def filename(self) -> str:
-        """Resuelve name + "." + extension (o solo name si no hay extension)."""
-        if self.extension:
-            return f"{self.name}.{self.extension}"
-        return self.name
+        return f"{self.name}.{self.extension}" if self.extension else self.name
 
     def __repr__(self) -> str:
         return f"File(uid={self.uid!r}, name={self.filename()!r})"
