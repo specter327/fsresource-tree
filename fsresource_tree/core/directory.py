@@ -1,24 +1,23 @@
-"""Directory: recurso contenedor.
-
-Directory expone `parent` y `children` como DATO puro. No define ningún
-método para agregar/quitar hijos o cambiar de padre: esa mutación es
-responsabilidad exclusiva de ResourceTree (capa de operaciones), para
-respetar la separación DATOS != OPERACIONES y la regla de que los
-elementos base nunca actúan sobre otros recursos.
-"""
+"""Filesystem-specific directory resource."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any
 
-from ..core.resource import Resource
+from resourcetree import Container
 
 
-@dataclass(eq=False, repr=False)
-class Directory(Resource):
-    parent: Optional["Directory"] = None
-    children: List[Resource] = field(default_factory=list)
+class Directory(Container):
+    """A filesystem directory modeled as a generic Container."""
+
+    def __init__(
+        self,
+        name: str,
+        parent: Directory | None = None,
+        uid: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(name=name, parent=parent, uid=uid, metadata=metadata)
 
     def __repr__(self) -> str:
         return (
