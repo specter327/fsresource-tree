@@ -24,6 +24,12 @@ def test_filesystem_tree_registers_specialized_resources():
     assert isinstance(root, resourcetree.Container)
 
 
+def test_filesystem_tree_string_root_is_a_directory():
+    tree = fs.FSResourceTree(root="/")
+    assert isinstance(tree.root, fs.Directory)
+    assert tree.root.name == "/"
+
+
 def test_file_filename():
     file = fs.File("report", extension="txt")
     assert file.filename() == "report.txt"
