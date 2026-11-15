@@ -17,6 +17,11 @@ def walk(resource: Resource, inverse: bool = False) -> Iterator[Resource]:
         raise TypeError("resource must be a Directory or File")
     if not isinstance(inverse, bool):
         raise TypeError("inverse must be a bool")
+    if resource.parent is not None:
+        if not isinstance(resource.parent, Directory):
+            raise TypeError("filesystem resource parents must be Directory instances")
+        if sum(child is resource for child in resource.parent.children) != 1:
+            raise ValueError("inconsistent parent/child relationship")
 
     stack: list[tuple[Resource, bool]] = [(resource, False)]
     visited: set[int] = set()
