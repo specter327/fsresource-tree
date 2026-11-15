@@ -21,9 +21,11 @@ def _validate_identity(data: dict[str, Any], kind: str) -> None:
         if not isinstance(value, str):
             raise ValueError(f"{kind} {field} must be an ISO-8601 string")
         try:
-            datetime.fromisoformat(value)
+            parsed = datetime.fromisoformat(value)
         except ValueError as exc:
             raise ValueError(f"{kind} {field} must be a valid ISO-8601 timestamp") from exc
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError(f"{kind} {field} must include a timezone")
 
 
 def validate_resource_payload(
