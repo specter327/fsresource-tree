@@ -39,11 +39,10 @@ with TemporaryDirectory() as temporary:
     root = Directory("workspace")
     documents = Directory("documents", parent=root)
     report = File("report", extension="txt", parent=documents)
-    provider = FilesystemProvider(Path(temporary), resource_root=root)
-
-    create(root, provider=provider, recursive_children=True)
-    assert exists(report, provider=provider)
-    delete(report, provider=provider)
+    with FilesystemProvider(Path(temporary), resource_root=root) as provider:
+        create(root, provider=provider, recursive_children=True)
+        assert exists(report, provider=provider)
+        delete(report, provider=provider)
 ```
 
 Each provider is bound to exactly one logical Directory root. A multi-root FSResourceTree therefore uses one provider mapping per physical root. Physical operations require an explicit provider. `path(resource)` returns a relative logical path and performs no I/O. `delete(..., recursive_children=True)` removes only modeled descendants; `purge=True` explicitly removes unmodeled physical contents under a modeled directory. The provider refuses to delete or purge its configured root and refuses symbolic links and Windows reparse points rather than following them.
