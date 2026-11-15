@@ -1,10 +1,10 @@
 """Filesystem specialization built on top of the generic resourcetree core."""
 
-from . import operations, renderers, serializers
+from . import operations, renderers
+from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
-from .core.resource import Resource
-from .core.tree import FSResourceTree, ResourceTree
+from .core.tree import FSResourceTree
 from .exceptions import (
     InvalidParentError,
     ResourceAlreadyRegisteredError,
@@ -12,16 +12,14 @@ from .exceptions import (
     ResourceTreeError,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Resource",
     "File",
     "Directory",
     "FSResourceTree",
-    "ResourceTree",
     "operations",
-    "serializers",
     "renderers",
     "ResourceTreeError",
     "ResourceNotFoundError",

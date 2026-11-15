@@ -21,7 +21,7 @@ The generic package owns resource identity and logical relationships. This packa
 
 | API / capability | Public surface | Implementation owner |
 |---|---|---|
-| `File.name`, `File.extension` | File properties | File model |
+| `File.name`, `File.extension`, `File.filename()` | File model | File model |
 | `File.size` | Cached/read-only property | File profile cache |
 | `File.query_size()` | File convenience method | Filesystem metadata operation |
 | `File.profile()` | File convenience method | Profile/query service |
@@ -32,13 +32,25 @@ The generic package owns resource identity and logical relationships. This packa
 | `ResourceTree.search(regex)` | Inherited generic search | ResourceTree in resourcetree |
 | physical scanning | `scan(location)` / scanner service | Scanner |
 | monitoring and callbacks | `enable_monitor()`, `disable_monitor()`, `watch_*` | Monitor service and event bus |
-| serialization | optional object wrappers | serializers |
+| dictionary, JSON and XML serialization | Model methods | Specialized model classes over the core format encoders |
 | Mermaid/canvas output | optional object wrappers | renderers |
 | statistics | analyzer service | analysis |
 | integrity and access checks | validator service | integrity |
 | OS selection | Provider | providers/adapters |
 
-## Important property semantics
+## Model invariants
+
+An `FSResourceTree` has only `Directory` roots and contains only `Directory` and `File` resources. A `Directory` accepts only those two specialized resource types as children. The generic core remains unaware of filesystem classes.
+
+The tree uses the generic `roots` collection. There is no singular-root alias or alternate generic tree name in this package.
+
+## Serialization
+
+`File` and `Directory` override `to_dict()` and `from_dict()` to preserve their explicit type identifiers and filesystem-specific fields. `FSResourceTree` reconstructs roots through the filesystem factory. The inherited JSON and XML methods operate on these specialized dictionaries through dynamic dispatch.
+
+The generic `resourcetree` factory remains limited to `Resource`, `Asset`, `Container` and `ResourceTree`; filesystem knowledge belongs here.
+
+## Property semantics
 
 Properties should not silently perform expensive or failure-prone I/O.
 
@@ -55,17 +67,16 @@ Expose natural object-oriented entry points on File and Directory, but implement
 - `operations/open.py`
 - `scanner.py`
 - `monitoring/`
-- `serializers/`
 - `renderers/`
 - `analysis/`
 - `integrity/`
 - `providers/`
 
-A method such as `file.move(destination)` should delegate to the operation layer. Collection operations should accept iterables or a ResourceTree and reuse the same implementation, rather than duplicating logic in File, Directory and ResourceTree.
+A method such as `file.move(destination)` should delegate to the operation layer. Collection operations should accept iterables or an FSResourceTree and reuse the same implementation, rather than duplicating logic in File, Directory and FSResourceTree.
 
 ## Tree composition
 
-`FSResourceTree` inherits the generic root and membership model. A filesystem scan should create Directory and File objects and register them in the tree. Mounting logical trees should remain a generic operation; reconciling mounted resources with physical filesystem locations is filesystem-specific.
+An `FSResourceTree` manages specialized Directory roots and their File/Directory descendants. A filesystem scan should create Directory and File objects and register them in the tree. Mounting logical filesystem trees remains an in-memory composition operation; reconciling mounted resources with physical filesystem locations is filesystem-specific.
 
 ## Path handling
 

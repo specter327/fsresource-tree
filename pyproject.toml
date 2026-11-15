@@ -1,7 +1,7 @@
 [project]
 
 name = "fsresource-tree"
-version = "0.2.0"
+version = "0.3.0"
 
 description = "Filesystem specialization for the generic resourcetree framework"
 
@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 
 dependencies = [
-    "resourcetree>=0.3.0"
+    "resourcetree>=0.4.0"
 ]
 
 
