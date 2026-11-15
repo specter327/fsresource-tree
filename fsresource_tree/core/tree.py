@@ -33,8 +33,8 @@ class FSResourceTree(ResourceTree):
         and cross-tree mounting. Keeping specialization validation here makes
         every one of those mutation paths enforce the same model contract.
         """
-        if not isinstance(resource, Directory):
-            raise TypeError("filesystem tree roots and subtrees must start with a Directory")
+        if not isinstance(resource, (Directory, File)):
+            raise TypeError("filesystem subtrees must start with a Directory or File")
 
         seen: set[int] = set()
         stack = [resource]
