@@ -20,7 +20,17 @@ if TYPE_CHECKING:
 class FilesystemProvider:
     """Access resources beneath a single, pre-existing directory boundary."""
 
-    def __init__(self, root: str | os.PathLike[str]) -> None:
+    def __init__(
+        self,
+        root: str | os.PathLike[str],
+        *,
+        resource_root: Directory,
+    ) -> None:
+        from ..core.directory import Directory
+
+        if not isinstance(resource_root, Directory):
+            raise TypeError("resource_root must be a Directory")
+        self._resource_root = resource_root
         candidate = Path(root).expanduser()
         if not candidate.exists():
             raise FileNotFoundError(candidate)
@@ -31,6 +41,10 @@ class FilesystemProvider:
     @property
     def root(self) -> Path:
         return self._root
+
+    @property
+    def resource_root(self) -> Directory:
+        return self._resource_root
 
     @staticmethod
     def _segment(value: str) -> str:
@@ -61,8 +75,8 @@ class FilesystemProvider:
             current = current.parent
             if not isinstance(current, Directory):
                 raise TypeError("filesystem resources must descend from Directory roots")
-        if not isinstance(current, Directory):
-            raise TypeError("filesystem resource hierarchy must have a Directory root")
+        if current is not self._resource_root:
+            raise ValueError("resource does not belong to this provider's logical root")
         for node in reversed(chain):
             name = node.filename() if isinstance(node, File) else node.name
             self._segment(name)
