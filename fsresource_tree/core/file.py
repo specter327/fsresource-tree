@@ -39,8 +39,8 @@ class File(Asset):
     def filename(self) -> str:
         return f"{self.name}.{self.extension}" if self.extension else self.name
 
-    def to_dict(self) -> dict[str, Any]:
-        result = super().to_dict()
+    def _to_dict_shallow(self) -> dict[str, Any]:
+        result = super()._to_dict_shallow()
         result["extension"] = self.extension
         return result
 
