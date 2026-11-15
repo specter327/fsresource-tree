@@ -47,10 +47,9 @@ class File(Asset):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> File:
-        if not isinstance(data, dict):
-            raise TypeError("file data must be a dictionary")
-        if data.get("type") != cls.TYPE:
-            raise ValueError(f"expected resource type {cls.TYPE!r}")
+        from .model import validate_resource_payload
+
+        validate_resource_payload(data, allowed_root_types=("file",))
         file = cls(
             name=data["name"],
             extension=data.get("extension"),
