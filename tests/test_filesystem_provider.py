@@ -13,7 +13,7 @@ def test_provider_maps_logical_root_to_existing_directory(tmp_path):
     model = Directory("logical-root")
     folder = Directory("docs", parent=model)
     item = File("report", extension="txt", parent=folder)
-    provider = FilesystemProvider(root)
+    provider = FilesystemProvider(root, resource_root=model)
 
     assert path(model) == Path(".")
     assert provider.resolve(item) == root / "docs" / "report.txt"
@@ -102,3 +102,13 @@ def test_walk_is_iterative_for_deep_hierarchies():
         current = Directory(f"d{index}", parent=current)
     assert sum(1 for _ in walk(root)) == 1501
     assert sum(1 for _ in walk(root, inverse=True)) == 1501
+
+def test_provider_rejects_resources_from_another_logical_root(tmp_path):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    bound = Directory("bound")
+    foreign = Directory("foreign")
+    provider = FilesystemProvider(root, resource_root=bound)
+
+    with pytest.raises(ValueError, match="logical root"):
+        provider.resolve(foreign)
