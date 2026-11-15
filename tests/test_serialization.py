@@ -307,6 +307,8 @@ def test_filesystem_tree_deep_dictionary_json_and_xml_serialization_are_iterativ
 
     json_value = tree.to_json(indent=None)
     assert '"uid":"deep-leaf"' in json_value
+    restored_json = FSResourceTree.from_json(json_value)
+    assert len(restored_json) == depth + 2
 
     xml_value = tree.to_xml()
     restored = FSResourceTree.from_xml(xml_value)
