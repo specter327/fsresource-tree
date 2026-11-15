@@ -239,3 +239,28 @@ def test_purge_removes_nested_unmodeled_contents_without_touching_siblings(tmp_p
         assert provider.exists(sibling)
     finally:
         provider.close()
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
+def test_posix_create_blocks_symlink_inserted_after_parent_resolution(tmp_path, monkeypatch):
+    root = tmp_path / "sandbox"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.write_text("protected")
+    model = Directory("root")
+    item = File("payload", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    original_open_parent = provider._open_parent_fd
+
+    def insert_symlink(relative):
+        parent_fd, name = original_open_parent(relative)
+        (root / name).symlink_to(outside)
+        return parent_fd, name
+
+    monkeypatch.setattr(provider, "_open_parent_fd", insert_symlink)
+    try:
+        with pytest.raises((FileExistsError, ValueError)):
+            provider.create(item)
+        assert outside.read_text() == "protected"
+    finally:
+        provider.close()
