@@ -32,11 +32,19 @@ class FilesystemProvider:
             raise TypeError("resource_root must be a Directory")
         self._resource_root = resource_root
         candidate = Path(root).expanduser()
-        if not candidate.exists():
-            raise FileNotFoundError(candidate)
-        if candidate.is_symlink() or not candidate.is_dir():
+        try:
+            root_info = candidate.lstat()
+        except FileNotFoundError:
+            raise FileNotFoundError(candidate) from None
+        if self._is_reparse_point(root_info) or not candidate.is_dir():
             raise NotADirectoryError(candidate)
         self._root = candidate.resolve(strict=True)
+
+    @staticmethod
+    def _is_reparse_point(info: os.stat_result) -> bool:
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        attributes = getattr(info, "st_file_attributes", 0)
+        return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse_flag)
 
     @property
     def root(self) -> Path:
@@ -102,8 +110,8 @@ class FilesystemProvider:
                 if allow_missing:
                     continue
                 raise
-            if stat.S_ISLNK(info.st_mode):
-                raise ValueError(f"symbolic links are not traversable: {current}")
+            if self._is_reparse_point(info):
+                raise ValueError(f"symbolic links and reparse points are not traversable: {current}")
             if current != candidate and not stat.S_ISDIR(info.st_mode):
                 raise NotADirectoryError(current)
         return candidate
@@ -203,7 +211,7 @@ class FilesystemProvider:
         for current, dirs, files in os.walk(target, topdown=True, followlinks=False):
             for name in (*dirs, *files):
                 item = Path(current) / name
-                if item.is_symlink():
-                    raise ValueError(f"purge refuses symbolic links: {item}")
+                if self._is_reparse_point(item.lstat()):
+                    raise ValueError(f"purge refuses symbolic links and reparse points: {item}")
         shutil.rmtree(target)
         return True
