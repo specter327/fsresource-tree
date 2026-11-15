@@ -129,6 +129,44 @@ class FilesystemProvider:
             raise TypeError("resource must be a Directory or File")
         return True
 
+    def delete_tree(self, resource: Directory | File) -> bool:
+        """Preflight a modeled subtree, then remove it bottom-up.
+
+        Unknown physical entries cause a refusal before any modeled child is
+        removed. This avoids partial deletion when the model is incomplete.
+        """
+        from ..core.directory import Directory
+        from ..core.file import File
+        from ..operations.walker import walk
+
+        nodes = list(walk(resource, inverse=True))
+        planned: dict[Path, Directory | File] = {}
+        for node in nodes:
+            target = self.resolve(node)
+            if target == self._root:
+                raise PermissionError("the provider root cannot be deleted")
+            planned[target] = node
+
+        for target, node in planned.items():
+            if not target.exists():
+                continue
+            if isinstance(node, Directory):
+                if not target.is_dir():
+                    raise NotADirectoryError(target)
+                expected = {
+                    self.relative_path(child).name
+                    for child in node.children
+                }
+                actual = {entry.name for entry in target.iterdir()}
+                if actual != expected:
+                    raise OSError(f"physical directory does not match modeled children: {target}")
+            elif isinstance(node, File) and not target.is_file():
+                raise IsADirectoryError(target)
+
+        for node in nodes:
+            self.delete(node)
+        return True
+
     def purge(self, directory: Directory) -> bool:
         """Remove a modeled directory and all physical descendants, without following links."""
         import shutil
