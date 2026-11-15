@@ -39,15 +39,21 @@ class FilesystemProvider:
         if self._is_reparse_point(root_info) or not candidate.is_dir():
             raise NotADirectoryError(candidate)
         self._root = candidate.resolve(strict=True)
+        self._descriptor_mode = (
+            os.name == "posix"
+            and hasattr(os, "O_NOFOLLOW")
+            and os.open in os.supports_dir_fd
+            and os.stat in os.supports_dir_fd
+        )
         self._root_fd: int | None = None
-        if os.name == "posix" and hasattr(os, "O_NOFOLLOW") and os.open in os.supports_dir_fd:
+        if self._descriptor_mode:
             flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
             self._root_fd = os.open(self._root, flags)
 
     @property
     def race_resistant(self) -> bool:
         """Whether physical operations are anchored to a POSIX directory descriptor."""
-        return self._root_fd is not None
+        return self._descriptor_mode
 
     def close(self) -> None:
         """Release the provider's pinned root directory descriptor."""
@@ -56,8 +62,8 @@ class FilesystemProvider:
             self._root_fd = None
 
     def __enter__(self) -> FilesystemProvider:
-        if self._root_fd is None and os.name == "posix":
-            raise RuntimeError("provider descriptor is closed or secure descriptor operations are unavailable")
+        if self._descriptor_mode and self._root_fd is None:
+            raise RuntimeError("provider descriptor is closed")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
@@ -81,12 +87,12 @@ class FilesystemProvider:
 
     def _open_parent_fd(self, relative: Path) -> tuple[int, str]:
         if self._root_fd is None:
-            raise RuntimeError("descriptor-relative operations are unavailable")
+            raise RuntimeError("provider descriptor is closed or unavailable")
         return self._open_parent_at(self._root_fd, tuple(relative.parts))
 
     def _stat_relative(self, relative: Path) -> os.stat_result:
         if self._root_fd is None:
-            raise RuntimeError("descriptor-relative operations are unavailable")
+            raise RuntimeError("provider descriptor is closed or unavailable")
         if not relative.parts:
             return os.fstat(self._root_fd)
         parent_fd, name = self._open_parent_fd(relative)
@@ -106,7 +112,7 @@ class FilesystemProvider:
 
     def _listdir_relative(self, relative: Path) -> set[str]:
         if self._root_fd is None:
-            raise RuntimeError("descriptor-relative operations are unavailable")
+            raise RuntimeError("provider descriptor is closed or unavailable")
         if not relative.parts:
             directory_fd = os.dup(self._root_fd)
         else:
@@ -215,6 +221,8 @@ class FilesystemProvider:
         if isinstance(resource, Directory):
             if self.race_resistant:
                 if not relative.parts:
+                    if self._root_fd is None:
+                        raise RuntimeError("provider descriptor is closed")
                     if not stat.S_ISDIR(os.fstat(self._root_fd).st_mode):
                         raise NotADirectoryError(self._root)
                     return target
