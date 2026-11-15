@@ -36,10 +36,16 @@ class FilesystemProvider:
     def _segment(value: str) -> str:
         if not isinstance(value, str) or not value or value in {".", ".."}:
             raise ValueError("resource names must be non-empty path components")
-        if "/" in value or chr(92) in value:
-            raise ValueError(f"resource name is not a single path component: {value!r}")
-        if chr(0) in value:
-            raise ValueError("resource names cannot contain NUL")
+        if "/" in value or chr(92) in value or any(char in value for char in '<>:"|?*'):
+            raise ValueError(f"resource name is not a portable path component: {value!r}")
+        if chr(0) in value or value.endswith((" ", ".")):
+            raise ValueError("resource names cannot contain NUL or end with a space or dot")
+        device_name = value.split(".", 1)[0].upper()
+        reserved = {"CON", "PRN", "AUX", "NUL"} | {
+            f"{prefix}{index}" for prefix in ("COM", "LPT") for index in range(1, 10)
+        }
+        if device_name in reserved:
+            raise ValueError(f"resource name is reserved on Windows: {value!r}")
         return value
 
     def relative_path(self, resource: Directory | File) -> Path:
