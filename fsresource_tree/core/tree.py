@@ -1,4 +1,4 @@
-"""Filesystem specialization of the generic ResourceTree."""
+""""Filesystem specialization of the generic ResourceTree."""
 
 from __future__ import annotations
 
@@ -26,45 +26,11 @@ class FSResourceTree(ResourceTree):
     ) -> None:
         super().__init__(roots=roots, name=name, uid=uid)
 
-    def _collect(self, resource):
-        """Validate filesystem types before the generic tree indexes a subtree.
-
-        ResourceTree uses _collect for root registration, child registration
-        and cross-tree mounting. Keeping specialization validation here makes
-        every one of those mutation paths enforce the same model contract.
-        """
+    def _validate_node(self, resource) -> None:
         if not isinstance(resource, (Directory, File)):
-            raise TypeError("filesystem subtrees must start with a Directory or File")
-
-        seen: set[int] = set()
-        stack = [resource]
-        while stack:
-            node = stack.pop()
-            identity = id(node)
-            if identity in seen:
-                raise ValueError("duplicate reference or cycle in filesystem hierarchy")
-            seen.add(identity)
-
-            if not isinstance(node, (Directory, File)):
-                raise TypeError(
-                    "filesystem trees can contain only Directory or File resources"
-                )
-
-            if isinstance(node, Directory):
-                child_ids: set[int] = set()
-                for child in node.children:
-                    if not isinstance(child, (Directory, File)):
-                        raise TypeError(
-                            "filesystem trees can contain only Directory or File resources"
-                        )
-                    if id(child) in child_ids:
-                        raise ValueError("duplicate child reference in filesystem hierarchy")
-                    child_ids.add(id(child))
-                    if child.parent is not node:
-                        raise ValueError("inconsistent parent/child relationship")
-                stack.extend(reversed(node.children))
-
-        return super()._collect(resource)
+            raise TypeError(
+                "filesystem trees can contain only Directory or File resources"
+            )
 
     def add_roots(self, resources: Iterable[Directory]) -> tuple[Directory, ...]:
         candidates = list(resources)
