@@ -1,38 +1,28 @@
-"""Resolución de rutas lógicas a partir de las relaciones parent."""
+"""Logical resource paths relative to a filesystem provider root."""
 
 from __future__ import annotations
 
-from typing import List, Optional, Union
+from pathlib import PurePath
 
 from ..core.directory import Directory
 from ..core.file import File
-import os
-
-_SEPARATOR = os.sep
 
 
-def path(resource: Union[Directory, File]) -> str:
-    """Resuelve una ruta lógica subiendo por los `parent` de `resource`.
+def path(resource: Directory | File) -> PurePath:
+    """Return the relative path below the hierarchy's top-level Directory.
 
-    Usa `filename()` (name + extension) para el segmento final si
-    `resource` es un File, y `name` para el resto de los segmentos.
-
-    Nota: esta resolución es genérica y deliberadamente simple; no
-    normaliza separadores especiales (p. ej. una raíz llamada "/", que
-    produce un separador duplicado al unirse). Ese tipo de convención es
-    responsabilidad de especializaciones concretas como fsresource-tree.
+    This function does not access the operating system. Use FilesystemProvider
+    to resolve the returned logical path against a confined physical root.
     """
-    segments: List[str] = []
-    current: Optional[Union[Directory, File]] = resource
-    is_leaf = True
-
-    while current is not None:
-        if is_leaf and hasattr(current, "filename"):
-            segments.append(current.filename())
-        else:
-            segments.append(current.name)
-        is_leaf = False
-        current = getattr(current, "parent", None)
-
-    segments.reverse()
-    return _SEPARATOR.join(segments)
+    if not isinstance(resource, (Directory, File)):
+        raise TypeError("resource must be a Directory or File")
+    segments: list[str] = []
+    current = resource
+    while current.parent is not None:
+        segments.append(current.filename() if isinstance(current, File) else current.name)
+        current = current.parent
+        if not isinstance(current, Directory):
+            raise TypeError("filesystem resources must descend from Directory roots")
+    if not isinstance(current, Directory):
+        raise TypeError("filesystem resource hierarchy must have a Directory root")
+    return PurePath(*reversed(segments))
