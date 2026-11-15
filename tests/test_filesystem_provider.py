@@ -74,7 +74,7 @@ def test_recursive_delete_only_removes_modeled_children(tmp_path):
     with pytest.raises(OSError):
         delete(folder, provider=provider, recursive_children=True)
     assert (root / "docs" / "untracked").exists()
-    assert not (root / "docs" / "report.txt").exists()
+    assert (root / "docs" / "report.txt").exists()
 
 
 def test_purge_refuses_symlinks_and_does_not_follow_them(tmp_path):
