@@ -152,12 +152,14 @@ def test_filesystem_tree_rejects_duplicate_uids_across_branches():
 
 
 def test_filesystem_tree_rejects_duplicate_uids_across_roots():
-    first = Directory("first", uid="duplicate")
-    second = Directory("second", uid="duplicate")
-    tree = FSResourceTree(roots=[first, second])
+    tree = FSResourceTree(
+        roots=[Directory("first", uid="first"), Directory("second", uid="second")]
+    )
+    data = tree.to_dict()
+    data["roots"][1]["uid"] = data["roots"][0]["uid"]
 
     with pytest.raises(ValueError, match="duplicate serialized resource uid"):
-        FSResourceTree.from_dict(tree.to_dict())
+        FSResourceTree.from_dict(data)
 
 
 def test_filesystem_tree_rejects_cyclic_serialized_resource_mappings():
