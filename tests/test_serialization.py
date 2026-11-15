@@ -102,3 +102,106 @@ def test_filesystem_tree_rejects_unknown_serialized_resource_types():
 
     with pytest.raises(ValueError, match="unknown filesystem resource type"):
         FSResourceTree.from_dict(data)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error", "message"),
+    [
+        (lambda data: data.pop("uid"), ValueError, "tree uid"),
+        (lambda data: data.pop("name"), ValueError, "tree name"),
+        (lambda data: data.update(roots={}), TypeError, "roots must be a list"),
+        (lambda data: data.update(roots=[{"type": "file"}]), ValueError, "root resource type"),
+        (
+            lambda data: data["roots"][0].update(created_at="not-a-timestamp"),
+            ValueError,
+            "valid ISO-8601 timestamp",
+        ),
+        (
+            lambda data: data["roots"][0].update(metadata=[]),
+            TypeError,
+            "metadata must be a dictionary",
+        ),
+        (
+            lambda data: data["roots"][0].update(children={}),
+            TypeError,
+            "children must be a list",
+        ),
+        (
+            lambda data: data["roots"][0]["children"][0].update(extension=42),
+            TypeError,
+            "extension must be a string",
+        ),
+    ],
+)
+def test_filesystem_tree_rejects_malformed_serialized_payloads(mutation, error, message):
+    tree, _ = make_tree()
+    data = tree.to_dict()
+    mutation(data)
+
+    with pytest.raises(error, match=message):
+        FSResourceTree.from_dict(data)
+
+
+def test_filesystem_tree_rejects_duplicate_uids_across_branches():
+    tree, _ = make_tree()
+    data = tree.to_dict()
+    data["roots"][0]["children"][0]["children"][0]["uid"] = "root"
+
+    with pytest.raises(ValueError, match="duplicate serialized resource uid"):
+        FSResourceTree.from_dict(data)
+
+
+def test_filesystem_tree_rejects_duplicate_uids_across_roots():
+    first = Directory("first", uid="duplicate")
+    second = Directory("second", uid="duplicate")
+    tree = FSResourceTree(roots=[first, second])
+
+    with pytest.raises(ValueError, match="duplicate serialized resource uid"):
+        FSResourceTree.from_dict(tree.to_dict())
+
+
+def test_filesystem_tree_rejects_cyclic_serialized_resource_mappings():
+    tree, _ = make_tree()
+    data = tree.to_dict()
+    data["roots"][0]["children"].append(data["roots"][0])
+
+    with pytest.raises(ValueError, match="cyclic or repeated"):
+        FSResourceTree.from_dict(data)
+
+
+def test_filesystem_tree_rejects_repeated_serialized_resource_mappings():
+    tree, _ = make_tree()
+    data = tree.to_dict()
+    child = data["roots"][0]["children"][0]
+    data["roots"][0]["children"].append(child)
+
+    with pytest.raises(ValueError, match="cyclic or repeated"):
+        FSResourceTree.from_dict(data)
+
+
+def test_directory_from_dict_rejects_missing_children_and_malformed_timestamps():
+    tree, _ = make_tree()
+    data = tree.roots[0].to_dict()
+    data.pop("children")
+
+    with pytest.raises(TypeError, match="children must be a list"):
+        Directory.from_dict(data)
+
+    data = tree.roots[0].to_dict()
+    data["updated_at"] = None
+    with pytest.raises(ValueError, match="ISO-8601 string"):
+        Directory.from_dict(data)
+
+
+def test_file_from_dict_rejects_container_fields_and_invalid_metadata():
+    _, file = make_tree()
+    data = file.to_dict()
+    data["children"] = []
+
+    with pytest.raises(ValueError, match="cannot contain children"):
+        File.from_dict(data)
+
+    data = file.to_dict()
+    data["metadata"] = "invalid"
+    with pytest.raises(TypeError, match="metadata must be a dictionary"):
+        File.from_dict(data)
