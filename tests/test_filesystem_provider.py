@@ -219,3 +219,23 @@ def test_posix_create_refuses_symlinked_parent_directory(tmp_path):
         assert not (outside / "payload").exists()
     finally:
         provider.close()
+
+
+def test_purge_removes_nested_unmodeled_contents_without_touching_siblings(tmp_path):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    folder = Directory("docs", parent=model)
+    nested = Directory("nested", parent=folder)
+    item = File("report", extension="txt", parent=nested)
+    sibling = File("keep", extension="txt", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    try:
+        create(model, provider=provider, recursive_children=True)
+        (root / "docs" / "nested" / "untracked.bin").write_bytes(b"untracked")
+        assert provider.purge(folder)
+        assert not (root / "docs").exists()
+        assert (root / "keep.txt").is_file()
+        assert provider.exists(sibling)
+    finally:
+        provider.close()
