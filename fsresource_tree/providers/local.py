@@ -376,10 +376,11 @@ class FilesystemProvider:
 
                 # Complete a no-follow preflight before removing anything.
                 entries: list[tuple[tuple[str, ...], bool]] = []
-                stack: list[tuple[int, tuple[str, ...]]] = [(os.dup(target_fd), ())]
+                initial_fd = os.dup(target_fd)
+                opened.append(initial_fd)
+                stack: list[tuple[int, tuple[str, ...]]] = [(initial_fd, ())]
                 while stack:
                     current_fd, prefix = stack.pop()
-                    opened.append(current_fd)
                     for child_name in os.listdir(current_fd):
                         child_info = os.stat(child_name, dir_fd=current_fd, follow_symlinks=False)
                         if self._is_reparse_point(child_info):
@@ -393,6 +394,7 @@ class FilesystemProvider:
                                 os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
                                 dir_fd=current_fd,
                             )
+                            opened.append(child_fd)
                             stack.append((child_fd, child_parts))
 
                 for child_parts, is_directory in sorted(entries, key=lambda item: len(item[0]), reverse=True):
