@@ -117,6 +117,16 @@ def test_filesystem_tree_rejects_unknown_serialized_resource_types():
             "valid ISO-8601 timestamp",
         ),
         (
+            lambda data: data["roots"][0].update(created_at="2024-01-02"),
+            ValueError,
+            "must include a timezone",
+        ),
+        (
+            lambda data: data["roots"][0].update(updated_at="2024-01-02T03:04:00"),
+            ValueError,
+            "must include a timezone",
+        ),
+        (
             lambda data: data["roots"][0].update(metadata=[]),
             TypeError,
             "metadata must be a dictionary",
