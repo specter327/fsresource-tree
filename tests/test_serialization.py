@@ -285,3 +285,38 @@ def test_directory_reconstruction_handles_hierarchies_deeper_than_recursion_limi
         assert isinstance(node, Directory)
         node = node.children[0]
     assert isinstance(node, File)
+
+
+
+def test_filesystem_tree_deep_dictionary_json_and_xml_serialization_are_iterative():
+    depth = 1200
+    root = Directory("root", uid="deep-root")
+    current = root
+    for index in range(depth):
+        child = Directory(f"directory-{index}", uid=f"directory-{index}")
+        current.append_child(child)
+        current = child
+    current.append_child(File("leaf", uid="deep-leaf", data={"ok": True}))
+    tree = FSResourceTree(roots=[root], name="deep-tree", uid="deep-tree")
+
+    data = tree.to_dict()
+    node = data["roots"][0]
+    for _ in range(depth):
+        node = node["children"][0]
+    assert node["children"][0]["uid"] == "deep-leaf"
+
+    json_value = tree.to_json(indent=None)
+    assert '"uid":"deep-leaf"' in json_value
+
+    xml_value = tree.to_xml()
+    restored = FSResourceTree.from_xml(xml_value)
+    assert len(restored) == depth + 2
+    node = restored.roots[0]
+    for _ in range(depth):
+        assert isinstance(node, Directory)
+        node = node.children[0]
+    assert isinstance(node, Directory)
+    leaf = node.children[0]
+    assert isinstance(leaf, File)
+    assert leaf.uid == "deep-leaf"
+    assert leaf.data == {"ok": True}
