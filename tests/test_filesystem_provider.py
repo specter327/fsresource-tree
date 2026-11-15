@@ -200,3 +200,22 @@ def test_closed_descriptor_provider_fails_closed(tmp_path):
 
     with pytest.raises(RuntimeError, match="closed"):
         provider.exists(item)
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
+def test_posix_create_refuses_symlinked_parent_directory(tmp_path):
+    root = tmp_path / "sandbox"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    model = Directory("root")
+    linked = Directory("linked", parent=model)
+    item = File("payload", parent=linked)
+    provider = FilesystemProvider(root, resource_root=model)
+    try:
+        (root / "linked").symlink_to(outside, target_is_directory=True)
+        with pytest.raises(OSError):
+            provider.create(item)
+        assert not (outside / "payload").exists()
+    finally:
+        provider.close()
