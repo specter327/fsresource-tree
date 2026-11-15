@@ -127,7 +127,7 @@ def test_filesystem_tree_rejects_unknown_serialized_resource_types():
             "children must be a list",
         ),
         (
-            lambda data: data["roots"][0]["children"][0].update(extension=42),
+            lambda data: data["roots"][0]["children"][0]["children"][0].update(extension=42),
             TypeError,
             "extension must be a string",
         ),
