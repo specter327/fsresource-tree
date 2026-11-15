@@ -3,7 +3,6 @@
 from ..core.directory import Directory
 from ..core.file import File
 from ..providers import FilesystemProvider
-from .walker import walk
 
 
 def delete(
@@ -19,7 +18,6 @@ def delete(
         if not isinstance(resource, Directory):
             raise TypeError("purge requires a Directory")
         return provider.purge(resource)
-    nodes = list(walk(resource, inverse=True)) if recursive_children else [resource]
-    for node in nodes:
-        provider.delete(node)
-    return True
+    if recursive_children:
+        return provider.delete_tree(resource)
+    return provider.delete(resource)
