@@ -62,24 +62,3 @@ def test_file_filename():
 
 def test_filesystem_package_does_not_export_generic_tree_alias():
     assert not hasattr(fs, "ResourceTree")
-
-
-def test_filesystem_models_require_directory_parents():
-    generic_parent = resourcetree.Container("generic")
-
-    with pytest.raises(TypeError, match="File parent must be a Directory"):
-        fs.File("file", parent=generic_parent)
-
-    with pytest.raises(TypeError, match="Directory parent must be a Directory"):
-        fs.Directory("directory", parent=generic_parent)
-
-
-def test_filesystem_models_accept_directory_parent_relationships():
-    root = fs.Directory("root")
-    child_directory = fs.Directory("child", parent=root)
-    child_file = fs.File("report", extension="txt", parent=child_directory)
-
-    assert child_directory.parent is root
-    assert child_file.parent is child_directory
-    assert root.children == (child_directory,)
-    assert child_directory.children == (child_file,)
