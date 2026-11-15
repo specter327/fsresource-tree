@@ -1,4 +1,4 @@
-"""Validation and reconstruction helpers for filesystem model dictionaries."""
+""""Validation and reconstruction helpers for filesystem model dictionaries."""
 
 from __future__ import annotations
 
@@ -39,7 +39,6 @@ def validate_resource_payload(
     uids = seen_uids if seen_uids is not None else set()
     seen_objects: set[int] = set()
     stack: list[tuple[dict[str, Any], bool]] = [(data, True)]
-
     while stack:
         node, is_root = stack.pop()
         if not isinstance(node, dict):
@@ -109,12 +108,46 @@ def validate_tree_payload(data: dict[str, Any], tree_type: str) -> None:
         )
 
 
-def resource_from_dict(data: dict[str, Any]):
-    """Reconstruct one filesystem resource from its explicit type."""
-    validate_resource_payload(data)
-    resource_type = data["type"]
-    if resource_type == "directory":
-        from .directory import Directory
-        return Directory.from_dict(data)
+def _resource_from_validated_dict(data: dict[str, Any]):
+    """Materialize a validated hierarchy in post-order without Python recursion."""
+    from .directory import Directory
     from .file import File
-    return File.from_dict(data)
+
+    built: dict[int, Directory | File] = {}
+    stack: list[tuple[dict[str, Any], bool]] = [(data, False)]
+    while stack:
+        node, expanded = stack.pop()
+        if not expanded and node["type"] == "directory":
+            stack.append((node, True))
+            for child in reversed(node["children"]):
+                stack.append((child, False))
+            continue
+
+        if node["type"] == "file":
+            resource = File(
+                name=node["name"],
+                extension=node.get("extension"),
+                uid=node["uid"],
+                metadata=node.get("metadata"),
+                data=node.get("data"),
+            )
+        else:
+            resource = Directory(
+                name=node["name"],
+                uid=node["uid"],
+                metadata=node.get("metadata"),
+            )
+            for child_data in node["children"]:
+                resource.append_child(built[id(child_data)])
+
+        resource.created_at = datetime.fromisoformat(node["created_at"])
+        resource.updated_at = datetime.fromisoformat(node["updated_at"])
+        built[id(node)] = resource
+
+    return built[id(data)]
+
+
+def resource_from_dict(data: dict[str, Any]):
+    """Validate and reconstruct one filesystem resource hierarchy."""
+    validate_resource_payload(data)
+    return _resource_from_validated_dict(data)
