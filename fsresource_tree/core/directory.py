@@ -20,6 +20,8 @@ class Directory(Container):
         uid: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
+        if parent is not None and not isinstance(parent, Directory):
+            raise TypeError("a Directory parent must be a Directory")
         super().__init__(name=name, parent=parent, uid=uid, metadata=metadata)
 
     def _validate_attachment(self, resource) -> None:
