@@ -201,25 +201,67 @@ class FilesystemProvider:
         return candidate
 
     def exists(self, resource: Directory | File) -> bool:
-        target = self.resolve(resource)
-        return target.exists()
+        relative = self.relative_path(resource)
+        if self.race_resistant:
+            return self._exists_relative(relative)
+        return self.resolve(resource).exists()
 
     def create(self, resource: Directory | File) -> Path:
         from ..core.directory import Directory
         from ..core.file import File
 
-        target = self.resolve(resource)
+        relative = self.relative_path(resource)
+        target = self._root / relative
         if isinstance(resource, Directory):
-            target.mkdir(exist_ok=True)
-            if target.is_symlink() or not target.is_dir():
-                raise NotADirectoryError(target)
-        elif isinstance(resource, File):
-            if target.exists():
-                if target.is_symlink() or not target.is_file():
-                    raise FileExistsError(target)
+            if self.race_resistant:
+                if not relative.parts:
+                    if not stat.S_ISDIR(os.fstat(self._root_fd).st_mode):
+                        raise NotADirectoryError(self._root)
+                    return target
+                parent_fd, name = self._open_parent_fd(relative)
+                try:
+                    try:
+                        os.mkdir(name, dir_fd=parent_fd)
+                    except FileExistsError:
+                        pass
+                    child_fd = os.open(
+                        name,
+                        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                        dir_fd=parent_fd,
+                    )
+                    os.close(child_fd)
+                finally:
+                    os.close(parent_fd)
             else:
-                with target.open("xb"):
-                    pass
+                target.mkdir(exist_ok=True)
+                if target.is_symlink() or not target.is_dir():
+                    raise NotADirectoryError(target)
+        elif isinstance(resource, File):
+            if self.race_resistant:
+                parent_fd, name = self._open_parent_fd(relative)
+                try:
+                    try:
+                        descriptor = os.open(
+                            name,
+                            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                            0o666,
+                            dir_fd=parent_fd,
+                        )
+                    except FileExistsError:
+                        info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                        if self._is_reparse_point(info) or not stat.S_ISREG(info.st_mode):
+                            raise FileExistsError(target)
+                    else:
+                        os.close(descriptor)
+                finally:
+                    os.close(parent_fd)
+            else:
+                if target.exists():
+                    if target.is_symlink() or not target.is_file():
+                        raise FileExistsError(target)
+                else:
+                    with target.open("xb"):
+                        pass
         else:
             raise TypeError("resource must be a Directory or File")
         return target
@@ -228,9 +270,33 @@ class FilesystemProvider:
         from ..core.directory import Directory
         from ..core.file import File
 
-        target = self.resolve(resource)
-        if target == self._root:
+        relative = self.relative_path(resource)
+        target = self._root / relative
+        if not relative.parts:
             raise PermissionError("the provider root cannot be deleted")
+        if self.race_resistant:
+            parent_fd, name = self._open_parent_fd(relative)
+            try:
+                try:
+                    info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    return False
+                if self._is_reparse_point(info):
+                    raise ValueError("refusing to delete a symbolic link or reparse point")
+                if isinstance(resource, Directory):
+                    if not stat.S_ISDIR(info.st_mode):
+                        raise NotADirectoryError(target)
+                    os.rmdir(name, dir_fd=parent_fd)
+                elif isinstance(resource, File):
+                    if not stat.S_ISREG(info.st_mode):
+                        raise IsADirectoryError(target)
+                    os.unlink(name, dir_fd=parent_fd)
+                else:
+                    raise TypeError("resource must be a Directory or File")
+                return True
+            finally:
+                os.close(parent_fd)
+
         if not target.exists():
             return False
         if isinstance(resource, Directory):
