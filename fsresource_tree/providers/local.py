@@ -36,9 +36,9 @@ class FilesystemProvider:
     def _segment(value: str) -> str:
         if not isinstance(value, str) or not value or value in {".", ".."}:
             raise ValueError("resource names must be non-empty path components")
-        if value in {os.sep, "/", "\\\\"} or os.sep in value or (os.altsep and os.altsep in value):
+        if "/" in value or chr(92) in value:
             raise ValueError(f"resource name is not a single path component: {value!r}")
-        if "\\x00" in value:
+        if chr(0) in value:
             raise ValueError("resource names cannot contain NUL")
         return value
 
@@ -59,7 +59,7 @@ class FilesystemProvider:
             raise TypeError("filesystem resource hierarchy must have a Directory root")
         for node in reversed(chain):
             name = node.filename() if isinstance(node, File) else node.name
-            chain_name = self._segment(name)
+            self._segment(name)
             if isinstance(node, File) and node is not resource:
                 raise ValueError("a File cannot contain child resources")
         # The top-level Directory represents the provider root itself.
