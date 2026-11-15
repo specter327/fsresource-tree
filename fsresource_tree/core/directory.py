@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from resourcetree import Container
@@ -33,21 +32,10 @@ class Directory(Container):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Directory:
-        from .model import resource_from_dict, validate_resource_payload
+        from .model import _resource_from_validated_dict, validate_resource_payload
 
         validate_resource_payload(data, allowed_root_types=("directory",))
-        directory = cls(
-            name=data["name"],
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-        )
-        for child_data in data["children"]:
-            directory.append_child(resource_from_dict(child_data))
-
-        # Child reconstruction updates the parent timestamp; restore serialized state last.
-        directory.created_at = datetime.fromisoformat(data["created_at"])
-        directory.updated_at = datetime.fromisoformat(data["updated_at"])
-        return directory
+        return _resource_from_validated_dict(data)
 
     def __repr__(self) -> str:
         return (
