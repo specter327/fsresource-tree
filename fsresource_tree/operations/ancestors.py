@@ -28,6 +28,12 @@ def ancestors(
     if not isinstance(inverse, bool):
         raise TypeError("inverse must be a bool")
 
+    if not include_self and resource.parent is not None:
+        if not isinstance(resource.parent, Directory):
+            raise TypeError("filesystem resource parents must be Directory instances")
+        if sum(child is resource for child in resource.parent.children) != 1:
+            raise ValueError("inconsistent parent/child relationship")
+
     chain: list[Resource] = []
     current = resource if include_self else resource.parent
     visited: set[int] = set()
