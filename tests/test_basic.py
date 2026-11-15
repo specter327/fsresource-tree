@@ -36,7 +36,7 @@ def test_filesystem_tree_rejects_non_directory_roots():
         fs.FSResourceTree(roots=[fs.File("standalone")])
 
     generic_root = resourcetree.Container("generic")
-    with pytest.raises(TypeError, match="only Directory or File"):
+    with pytest.raises(TypeError, match="roots must be Directory"):
         fs.FSResourceTree(roots=[fs.Directory("valid", parent=None), generic_root])
 
 
