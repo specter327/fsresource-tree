@@ -27,7 +27,7 @@ def test_provider_rejects_traversal_components(tmp_path):
     root.mkdir()
     model = Directory("root")
     outside = Directory("..", parent=model)
-    provider = FilesystemProvider(root)
+    provider = FilesystemProvider(root, resource_root=model)
 
     with pytest.raises(ValueError):
         provider.resolve(outside)
@@ -42,7 +42,7 @@ def test_provider_rejects_symlink_ancestor(tmp_path):
     model = Directory("root")
     linked = Directory("escape", parent=model)
     child = File("secret", parent=linked)
-    provider = FilesystemProvider(root)
+    provider = FilesystemProvider(root, resource_root=model)
 
     with pytest.raises(ValueError, match="symbolic links"):
         provider.resolve(child)
@@ -51,8 +51,8 @@ def test_provider_rejects_symlink_ancestor(tmp_path):
 def test_provider_never_deletes_its_root(tmp_path):
     root = tmp_path / "sandbox"
     root.mkdir()
-    provider = FilesystemProvider(root)
     model = Directory("root")
+    provider = FilesystemProvider(root, resource_root=model)
 
     with pytest.raises(PermissionError):
         provider.delete(model)
@@ -67,7 +67,7 @@ def test_recursive_delete_only_removes_modeled_children(tmp_path):
     model = Directory("root")
     folder = Directory("docs", parent=model)
     item = File("report", extension="txt", parent=folder)
-    provider = FilesystemProvider(root)
+    provider = FilesystemProvider(root, resource_root=model)
     create(model, provider=provider, recursive_children=True)
 
     (root / "docs" / "untracked").write_text("keep")
@@ -86,7 +86,7 @@ def test_purge_refuses_symlinks_and_does_not_follow_them(tmp_path):
     protected.write_text("protected")
     model = Directory("root")
     folder = Directory("docs", parent=model)
-    provider = FilesystemProvider(root)
+    provider = FilesystemProvider(root, resource_root=model)
     create(folder, provider=provider)
     (root / "docs" / "escape").symlink_to(outside, target_is_directory=True)
 
