@@ -112,3 +112,14 @@ def test_provider_rejects_resources_from_another_logical_root(tmp_path):
 
     with pytest.raises(ValueError, match="logical root"):
         provider.resolve(foreign)
+
+@pytest.mark.parametrize("name", ["C:", "CON", "NUL.txt", "trailing.", "trailing "])
+def test_provider_rejects_nonportable_path_components(tmp_path, name):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    invalid = Directory(name, parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+
+    with pytest.raises(ValueError):
+        provider.resolve(invalid)
