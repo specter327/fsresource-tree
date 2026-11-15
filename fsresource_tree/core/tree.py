@@ -26,23 +26,51 @@ class FSResourceTree(ResourceTree):
     ) -> None:
         super().__init__(roots=roots, name=name, uid=uid)
 
+    def _collect(self, resource):
+        """Validate filesystem types before the generic tree indexes a subtree.
+
+        ResourceTree uses _collect for root registration, child registration
+        and cross-tree mounting. Keeping specialization validation here makes
+        every one of those mutation paths enforce the same model contract.
+        """
+        if not isinstance(resource, Directory):
+            raise TypeError("filesystem tree roots and subtrees must start with a Directory")
+
+        seen: set[int] = set()
+        stack = [resource]
+        while stack:
+            node = stack.pop()
+            identity = id(node)
+            if identity in seen:
+                raise ValueError("duplicate reference or cycle in filesystem hierarchy")
+            seen.add(identity)
+
+            if not isinstance(node, (Directory, File)):
+                raise TypeError(
+                    "filesystem trees can contain only Directory or File resources"
+                )
+
+            if isinstance(node, Directory):
+                child_ids: set[int] = set()
+                for child in node.children:
+                    if not isinstance(child, (Directory, File)):
+                        raise TypeError(
+                            "filesystem trees can contain only Directory or File resources"
+                        )
+                    if id(child) in child_ids:
+                        raise ValueError("duplicate child reference in filesystem hierarchy")
+                    child_ids.add(id(child))
+                    if child.parent is not node:
+                        raise ValueError("inconsistent parent/child relationship")
+                stack.extend(reversed(node.children))
+
+        return super()._collect(resource)
+
     def add_roots(self, resources: Iterable[Directory]) -> tuple[Directory, ...]:
         candidates = list(resources)
-        seen: set[int] = set()
         for root in candidates:
             if not isinstance(root, Directory):
                 raise TypeError("filesystem tree roots must be Directory instances")
-            stack = [root]
-            while stack:
-                node = stack.pop()
-                identity = id(node)
-                if identity in seen:
-                    raise ValueError("duplicate reference or cycle in filesystem hierarchy")
-                seen.add(identity)
-                if not isinstance(node, (Directory, File)):
-                    raise TypeError("filesystem trees can contain only Directory or File resources")
-                if isinstance(node, Directory):
-                    stack.extend(node.children)
         return super().add_roots(candidates)
 
     def register(self, resource, parent: Directory | None = None) -> str:
