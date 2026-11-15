@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
 
 from resourcetree import ResourceTree
 
@@ -60,11 +59,8 @@ class FSResourceTree(ResourceTree):
             raise TypeError("only an FSResourceTree can be mounted into an FSResourceTree")
         return super().mount(entrypoint, tree)
 
-    def to_dict(self) -> dict[str, Any]:
-        return super().to_dict()
-
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> FSResourceTree:
+    def from_dict(cls, data: dict) -> FSResourceTree:
         if not isinstance(data, dict):
             raise TypeError("tree data must be a dictionary")
         if data.get("type") != cls.TYPE:

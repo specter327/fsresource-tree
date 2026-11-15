@@ -90,4 +90,4 @@ The target platforms are Windows, GNU/Linux, macOS and Termux. Platform-specific
 
 ## Versioning
 
-This release requires `resourcetree>=0.4.0`. The package is published manually by its maintainer; this repository does not publish to PyPI automatically.
+This release requires `resourcetree>=0.5.0`. The package is published manually by its maintainer; this repository does not publish to PyPI automatically.

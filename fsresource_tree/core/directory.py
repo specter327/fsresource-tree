@@ -29,11 +29,6 @@ class Directory(Container):
             raise TypeError("a Directory can contain only Directory or File resources")
         super()._validate_attachment(resource)
 
-    def to_dict(self) -> dict[str, Any]:
-        result = super().to_dict()
-        result["children"] = [child.to_dict() for child in self.children]
-        return result
-
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Directory:
         if not isinstance(data, dict):
