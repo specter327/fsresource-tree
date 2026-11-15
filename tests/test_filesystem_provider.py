@@ -123,3 +123,67 @@ def test_provider_rejects_nonportable_path_components(tmp_path, name):
 
     with pytest.raises(ValueError):
         provider.resolve(invalid)
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
+def test_posix_provider_uses_a_pinned_directory_descriptor(tmp_path):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    provider = FilesystemProvider(root, resource_root=model)
+    try:
+        assert provider.race_resistant
+        item = File("payload", extension="bin", parent=model)
+        provider.create(item)
+        assert provider.exists(item)
+        assert provider.delete(item)
+    finally:
+        provider.close()
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
+def test_posix_create_refuses_a_symlink_at_the_final_component(tmp_path):
+    root = tmp_path / "sandbox"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.write_text("protected")
+    model = Directory("root")
+    item = File("payload", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    try:
+        (root / "payload").symlink_to(outside)
+        with pytest.raises((FileExistsError, ValueError)):
+            provider.create(item)
+        assert outside.read_text() == "protected"
+    finally:
+        provider.close()
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
+def test_posix_delete_refuses_a_symlink_at_the_final_component(tmp_path):
+    root = tmp_path / "sandbox"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.write_text("protected")
+    model = Directory("root")
+    item = File("payload", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    try:
+        (root / "payload").symlink_to(outside)
+        with pytest.raises(ValueError, match="symbolic link"):
+            provider.delete(item)
+        assert outside.read_text() == "protected"
+    finally:
+        provider.close()
+
+
+def test_provider_context_manager_releases_its_root_descriptor(tmp_path):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    provider = FilesystemProvider(root, resource_root=model)
+    if provider.race_resistant:
+        descriptor = provider._root_fd
+        with provider:
+            assert provider._root_fd == descriptor
+        assert provider._root_fd is None
