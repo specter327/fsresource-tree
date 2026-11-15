@@ -39,6 +39,90 @@ class FilesystemProvider:
         if self._is_reparse_point(root_info) or not candidate.is_dir():
             raise NotADirectoryError(candidate)
         self._root = candidate.resolve(strict=True)
+        self._root_fd: int | None = None
+        if os.name == "posix" and hasattr(os, "O_NOFOLLOW") and os.open in os.supports_dir_fd:
+            flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+            self._root_fd = os.open(self._root, flags)
+
+    @property
+    def race_resistant(self) -> bool:
+        """Whether physical operations are anchored to a POSIX directory descriptor."""
+        return self._root_fd is not None
+
+    def close(self) -> None:
+        """Release the provider's pinned root directory descriptor."""
+        if self._root_fd is not None:
+            os.close(self._root_fd)
+            self._root_fd = None
+
+    def __enter__(self) -> FilesystemProvider:
+        if self._root_fd is None and os.name == "posix":
+            raise RuntimeError("provider descriptor is closed or secure descriptor operations are unavailable")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
+    @staticmethod
+    def _open_parent_at(root_fd: int, parts: tuple[str, ...]) -> tuple[int, str]:
+        if not parts:
+            raise ValueError("the provider root has no parent resource")
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+        current = os.dup(root_fd)
+        try:
+            for part in parts[:-1]:
+                next_fd = os.open(part, flags, dir_fd=current)
+                os.close(current)
+                current = next_fd
+            return current, parts[-1]
+        except BaseException:
+            os.close(current)
+            raise
+
+    def _open_parent_fd(self, relative: Path) -> tuple[int, str]:
+        if self._root_fd is None:
+            raise RuntimeError("descriptor-relative operations are unavailable")
+        return self._open_parent_at(self._root_fd, tuple(relative.parts))
+
+    def _stat_relative(self, relative: Path) -> os.stat_result:
+        if self._root_fd is None:
+            raise RuntimeError("descriptor-relative operations are unavailable")
+        if not relative.parts:
+            return os.fstat(self._root_fd)
+        parent_fd, name = self._open_parent_fd(relative)
+        try:
+            return os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        finally:
+            os.close(parent_fd)
+
+    def _exists_relative(self, relative: Path) -> bool:
+        try:
+            info = self._stat_relative(relative)
+        except FileNotFoundError:
+            return False
+        if self._is_reparse_point(info):
+            raise ValueError("symbolic links and reparse points are not traversable")
+        return True
+
+    def _listdir_relative(self, relative: Path) -> set[str]:
+        if self._root_fd is None:
+            raise RuntimeError("descriptor-relative operations are unavailable")
+        if not relative.parts:
+            directory_fd = os.dup(self._root_fd)
+        else:
+            parent_fd, name = self._open_parent_fd(relative)
+            try:
+                directory_fd = os.open(
+                    name,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                    dir_fd=parent_fd,
+                )
+            finally:
+                os.close(parent_fd)
+        try:
+            return set(os.listdir(directory_fd))
+        finally:
+            os.close(directory_fd)
 
     @staticmethod
     def _is_reparse_point(info: os.stat_result) -> bool:
