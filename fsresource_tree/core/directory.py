@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from resourcetree import Container
@@ -20,6 +19,8 @@ class Directory(Container):
         uid: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
+        if parent is not None and not isinstance(parent, Directory):
+            raise TypeError("a Directory parent must be a Directory")
         super().__init__(name=name, parent=parent, uid=uid, metadata=metadata)
 
     def _validate_attachment(self, resource) -> None:
@@ -31,26 +32,10 @@ class Directory(Container):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Directory:
-        if not isinstance(data, dict):
-            raise TypeError("directory data must be a dictionary")
-        if data.get("type") != cls.TYPE:
-            raise ValueError(f"expected resource type {cls.TYPE!r}")
+        from .model import _resource_from_validated_dict, validate_resource_payload
 
-        directory = cls(
-            name=data["name"],
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-        )
-        created_at = datetime.fromisoformat(data["created_at"])
-        updated_at = datetime.fromisoformat(data["updated_at"])
-
-        from .model import resource_from_dict
-        for child_data in data.get("children", []):
-            directory.append_child(resource_from_dict(child_data))
-
-        directory.created_at = created_at
-        directory.updated_at = updated_at
-        return directory
+        validate_resource_payload(data, allowed_root_types=("directory",))
+        return _resource_from_validated_dict(data)
 
     def __repr__(self) -> str:
         return (

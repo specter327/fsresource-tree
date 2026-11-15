@@ -2,9 +2,9 @@
 
 **Filesystem specialization for [resourcetree](https://github.com/specter327/resourcetree).**
 
-`fsresource-tree` models filesystem entries using the generic resource hierarchy supplied by `resourcetree`. It does not redefine the foundational resource model.
+`fsresource-tree` maps the generic resource model to filesystem entries. It does not redefine the foundational hierarchy.
 
-## Inheritance
+## Model layers
 
 ```text
 resourcetree
@@ -16,69 +16,41 @@ resourcetree
 fsresource-tree
 ├── File(Asset)
 ├── Directory(Container)
-└── FSResourceTree(ResourceTree)
+├── FSResourceTree(ResourceTree)
+└── FilesystemProvider
 ```
 
-- `File` extends `Asset` with filesystem-specific attributes such as extension.
-- `Directory` extends `Container` and accepts only filesystem `Directory` and `File` children.
-- `FSResourceTree` extends `ResourceTree` and manages one or more directory roots containing filesystem resource types only.
+- `resourcetree` owns identity, metadata, parent/children relationships, generic traversal, indexing, composition and generic dict/JSON/XML serialization.
+- `fsresource-tree` defines filesystem-specific `File`, `Directory` and `FSResourceTree` types and their specialized serialization.
+- `FilesystemProvider` maps one top-level logical `Directory` to one existing physical directory and owns physical I/O. The model itself does not perform filesystem access.
 
-The package exports `FSResourceTree` as its only tree class name. Use the generic `ResourceTree` directly from `resourcetree` when a domain-neutral forest is required.
+## Confined local provider
 
-## Design boundary
-
-The generic core owns identity, metadata, hierarchy, traversal, indexing and composition. This specialization owns filesystem concerns: physical paths, scanning, file and directory operations, permissions, size queries, integrity checks, platform compatibility and filesystem monitoring.
-
-The public API operates on `File`, `Directory` and `FSResourceTree` objects. Text paths are inputs to discovery or resource construction, not the central data model.
-
-## Installation
-
-```bash
-pip install fsresource-tree
-```
-
-## Basic model
+The provider requires an explicit top-level model `Directory` and an existing physical directory. It binds that exact model object to the physical root; other independent model roots cannot be resolved through the same provider. The model root's name is not appended to the physical path. Descendants are resolved relative to it.
 
 ```python
-from fsresource_tree import Directory, File, FSResourceTree
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-root = Directory("/")
-documents = Directory("documents", parent=root)
-report = File("report", extension="txt", parent=documents)
+from fsresource_tree import Directory, File, FilesystemProvider
+from fsresource_tree.operations import create, delete, exists
 
-tree = FSResourceTree(roots=[root])
+with TemporaryDirectory() as temporary:
+    root = Directory("workspace")
+    documents = Directory("documents", parent=root)
+    report = File("report", extension="txt", parent=documents)
+    provider = FilesystemProvider(Path(temporary), resource_root=root)
 
-print(report.filename())
-print(tree.search(r"report"))
+    create(root, provider=provider, recursive_children=True)
+    assert exists(report, provider=provider)
+    delete(report, provider=provider)
 ```
 
-Every registered filesystem root must be a `Directory`; an empty tree can be populated later. A directory can contain only `Directory` and `File` instances. This prevents generic resources from entering a filesystem-specific model accidentally.
+Each provider is bound to exactly one logical Directory root. A multi-root FSResourceTree therefore uses one provider mapping per physical root. Physical operations require an explicit provider. `path(resource)` returns a relative logical path and performs no I/O. `delete(..., recursive_children=True)` removes only modeled descendants; `purge=True` explicitly removes unmodeled physical contents under a modeled directory. The provider refuses to delete or purge its configured root and refuses symbolic links and Windows reparse points rather than following them.
 
-## Serialization
-
-Filesystem classes override the generic dictionary contract so that specialized types and fields survive reconstruction:
-
-```python
-from fsresource_tree import Directory, File, FSResourceTree
-
-root = Directory("/")
-File("report", extension="txt", parent=root, data={"size": 128})
-tree = FSResourceTree(roots=[root])
-
-restored = FSResourceTree.from_dict(tree.to_dict())
-restored_json = FSResourceTree.from_json(tree.to_json())
-restored_xml = FSResourceTree.from_xml(tree.to_xml())
-
-assert isinstance(restored.roots[0], Directory)
-assert isinstance(restored.roots[0].children[0], File)
-assert restored.roots[0].children[0].extension == "txt"
-```
-
-The round-trip preserves resource and tree identifiers, names, timestamps, metadata, file payloads, extensions and hierarchy. The core index is rebuilt from the restored roots. The generic `resourcetree` factory intentionally does not know filesystem types.
+**Security boundary:** this provider enforces lexical confinement and checks existing path components for symbolic links and Windows reparse points. Path-based checks cannot eliminate every time-of-check/time-of-use race against a concurrent hostile process. Do not use it as a hardened sandbox against an attacker who can concurrently mutate the provider directory. Descriptor-relative, platform-specific operations are a separate hardening layer.
 
 ## Generic core
-
-The underlying classes can be imported directly from `resourcetree`:
 
 ```python
 from resourcetree import Asset, Container, Resource, ResourceTree
@@ -86,8 +58,12 @@ from resourcetree import Asset, Container, Resource, ResourceTree
 
 ## Supported platforms
 
-The target platforms are Windows, GNU/Linux, macOS and Termux. Platform-specific behavior is provided by filesystem providers and must be validated on each target environment.
+The model is platform-independent. The local provider uses host filesystem path semantics. Windows reparse-point handling and race-resistant descriptor-relative operations require additional platform-specific validation.
 
-## Versioning
+## Installation
 
-This release requires `resourcetree>=0.5.0`. The package is published manually by its maintainer; this repository does not publish to PyPI automatically.
+```bash
+pip install fsresource-tree
+```
+
+Packages are published manually by the maintainer; this repository does not publish to PyPI automatically.

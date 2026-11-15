@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from resourcetree import Asset
@@ -26,6 +25,8 @@ class File(Asset):
     ) -> None:
         if extension is not None and not isinstance(extension, str):
             raise TypeError("extension must be a string or None")
+        if parent is not None and not isinstance(parent, Directory):
+            raise TypeError("a File parent must be a Directory")
         super().__init__(
             name=name,
             parent=parent,
@@ -45,20 +46,10 @@ class File(Asset):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> File:
-        if not isinstance(data, dict):
-            raise TypeError("file data must be a dictionary")
-        if data.get("type") != cls.TYPE:
-            raise ValueError(f"expected resource type {cls.TYPE!r}")
-        file = cls(
-            name=data["name"],
-            extension=data.get("extension"),
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-            data=data.get("data"),
-        )
-        file.created_at = datetime.fromisoformat(data["created_at"])
-        file.updated_at = datetime.fromisoformat(data["updated_at"])
-        return file
+        from .model import _resource_from_validated_dict, validate_resource_payload
+
+        validate_resource_payload(data, allowed_root_types=("file",))
+        return _resource_from_validated_dict(data)
 
     def __repr__(self) -> str:
         return f"File(uid={self.uid!r}, name={self.filename()!r})"

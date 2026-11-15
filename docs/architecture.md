@@ -1,6 +1,6 @@
 # Filesystem specialization architecture
 
-## Inheritance contract
+## Inheritance
 
 ```text
 resourcetree
@@ -12,72 +12,51 @@ resourcetree
 fsresource-tree
 ├── File(Asset)
 ├── Directory(Container)
-└── FSResourceTree(ResourceTree)
+├── FSResourceTree(ResourceTree)
+└── FilesystemProvider
 ```
 
-The generic package owns resource identity and logical relationships. This package owns the interpretation and manipulation of real filesystem objects.
+## Responsibility boundaries
 
-## Placement of filesystem capabilities
+### resourcetree
 
-| API / capability | Public surface | Implementation owner |
-|---|---|---|
-| `File.name`, `File.extension`, `File.filename()` | File model | File model |
-| `File.size` | Cached/read-only property | File profile cache |
-| `File.query_size()` | File convenience method | Filesystem metadata operation |
-| `File.profile()` | File convenience method | Profile/query service |
-| `File.create()`, `remove()`, `move()`, `copy()` | File convenience methods | Filesystem operations |
-| `File.open()` | File convenience method | Filesystem I/O operation |
-| `Directory.move()`, `remove()`, `copy()` | Directory convenience methods | Filesystem operations |
-| `Directory.search(regex)` | Inherited generic search | Container in resourcetree |
-| `ResourceTree.search(regex)` | Inherited generic search | ResourceTree in resourcetree |
-| physical scanning | `scan(location)` / scanner service | Scanner |
-| monitoring and callbacks | `enable_monitor()`, `disable_monitor()`, `watch_*` | Monitor service and event bus |
-| dictionary, JSON and XML serialization | Model methods | Specialized model classes over the core format encoders |
-| Mermaid/canvas output | optional object wrappers | renderers |
-| statistics | analyzer service | analysis |
-| integrity and access checks | validator service | integrity |
-| OS selection | Provider | providers/adapters |
+The generic core owns resource identity, metadata, timestamps, parent/children relationships, generic traversal, optional forest management, derived indexing and base dictionary/JSON/XML serialization. It has no filesystem I/O or operating-system path semantics.
 
-## Model invariants
+### fsresource-tree model
 
-An `FSResourceTree` has only `Directory` roots and contains only `Directory` and `File` resources. A `Directory` accepts only those two specialized resource types as children. The generic core remains unaware of filesystem classes.
+- `File(Asset)` adds file-specific fields such as extension and payload.
+- `Directory(Container)` constrains children to filesystem resource types.
+- `FSResourceTree(ResourceTree)` constrains roots and descendants to Directory/File.
+- Specialized `to_dict/from_dict` implementations preserve concrete filesystem resource types. The generic core factory does not know these types.
 
-The tree uses the generic `roots` collection. There is no singular-root alias or alternate generic tree name in this package.
+### FilesystemProvider
+
+The provider owns physical path resolution and local filesystem I/O. It maps the top-level logical Directory to one existing physical directory. Its name is a model label and is not appended to the provider root path.
+
+Physical operations require an explicit provider. The model can be built, traversed, searched and serialized without touching the host filesystem.
+
+## Operation boundary
+
+| Operation | Responsibility |
+|---|---|
+| `path(resource)` | In-memory relative logical path |
+| `walk(resource)` | Iterative in-memory traversal |
+| `exists(resource, provider=...)` | Physical existence check |
+| `create(resource, provider=...)` | Physical creation |
+| `delete(resource, provider=...)` | Physical deletion |
+| `FilesystemProvider.resolve(...)` | Confined mapping to a physical path |
+| `FilesystemProvider.purge(...)` | Explicit removal of unmodeled physical contents |
+
+Recursive modeled deletion preflights the physical directory contents before modifying the tree. It refuses a mismatch rather than silently deleting unmodeled entries. Purge is separate and explicit. The configured provider root cannot be deleted or purged.
+
+## Security boundary and remaining hardening
+
+The local provider rejects traversal components and symbolic links and Windows reparse points in existing path components. These path-based checks are defense in depth, not a complete defense against a hostile process concurrently mutating the same directory. Race-resistant descriptor-relative operations and Windows reparse-point handling require platform-specific implementations and validation. Do not treat this provider as a hardened sandbox against concurrent hostile filesystem mutation.
 
 ## Serialization
 
-`File` and `Directory` override `to_dict()` and `from_dict()` to preserve their explicit type identifiers and filesystem-specific fields. `FSResourceTree` reconstructs roots through the filesystem factory. The inherited JSON and XML methods operate on these specialized dictionaries through dynamic dispatch.
+File and Directory own their specialized dictionary representation. FSResourceTree reconstructs roots through the filesystem-specific factory. The inherited JSON/XML encoders serialize those dictionaries through dynamic dispatch. The generic core remains unaware of filesystem types.
 
-The generic `resourcetree` factory remains limited to `Resource`, `Asset`, `Container` and `ResourceTree`; filesystem knowledge belongs here.
+## Extension model
 
-## Property semantics
-
-Properties should not silently perform expensive or failure-prone I/O.
-
-For example, `File.size` should expose the most recently known size in the in-memory profile. `File.query_size()` should explicitly query the filesystem and refresh that value. `File.profile()` should refresh a defined metadata snapshot. This makes I/O visible, allows cached/offline representations and gives monitoring a clear update target.
-
-## Instance methods and operation modules
-
-Expose natural object-oriented entry points on File and Directory, but implement the actual behavior in independent modules:
-
-- `operations/create.py`
-- `operations/delete.py`
-- `operations/move.py`
-- `operations/copy.py`
-- `operations/open.py`
-- `scanner.py`
-- `monitoring/`
-- `renderers/`
-- `analysis/`
-- `integrity/`
-- `providers/`
-
-A method such as `file.move(destination)` should delegate to the operation layer. Collection operations should accept iterables or an FSResourceTree and reuse the same implementation, rather than duplicating logic in File, Directory and FSResourceTree.
-
-## Tree composition
-
-An `FSResourceTree` manages specialized Directory roots and their File/Directory descendants. A filesystem scan should create Directory and File objects and register them in the tree. Mounting logical filesystem trees remains an in-memory composition operation; reconciling mounted resources with physical filesystem locations is filesystem-specific.
-
-## Path handling
-
-A path string is an input/output representation at the filesystem boundary. The primary in-memory API should accept and return File, Directory and FSResourceTree objects. A filesystem adapter resolves an object to its physical path; the generic core must never interpret a string as an operating-system path.
+Future platform-specific providers may implement the same provider boundary for POSIX, Windows, Android/Termux, remote filesystems or virtual filesystems. Such providers belong in this specialization or dedicated adapters, never in the generic core.
