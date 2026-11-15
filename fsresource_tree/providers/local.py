@@ -318,28 +318,46 @@ class FilesystemProvider:
         from ..operations.walker import walk
 
         nodes = list(walk(resource, inverse=True))
-        planned: dict[Path, Directory | File] = {}
         for node in nodes:
-            target = self.resolve(node)
-            if target == self._root:
+            relative = self.relative_path(node)
+            target = self._root / relative
+            if not relative.parts:
                 raise PermissionError("the provider root cannot be deleted")
-            planned[target] = node
-
-        for target, node in planned.items():
-            if not target.exists():
-                continue
-            if isinstance(node, Directory):
-                if not target.is_dir():
-                    raise NotADirectoryError(target)
-                expected = {
-                    self.relative_path(child).name
-                    for child in node.children
-                }
-                actual = {entry.name for entry in target.iterdir()}
-                if actual != expected:
-                    raise OSError(f"physical directory does not match modeled children: {target}")
-            elif isinstance(node, File) and not target.is_file():
-                raise IsADirectoryError(target)
+            if self.race_resistant:
+                try:
+                    info = self._stat_relative(relative)
+                except FileNotFoundError:
+                    continue
+                if self._is_reparse_point(info):
+                    raise ValueError("recursive deletion refuses symbolic links and reparse points")
+                if isinstance(node, Directory):
+                    if not stat.S_ISDIR(info.st_mode):
+                        raise NotADirectoryError(target)
+                    expected = {
+                        self.relative_path(child).name
+                        for child in node.children
+                    }
+                    actual = self._listdir_relative(relative)
+                    if actual != expected:
+                        raise OSError(f"physical directory does not match modeled children: {target}")
+                elif isinstance(node, File) and not stat.S_ISREG(info.st_mode):
+                    raise IsADirectoryError(target)
+            else:
+                target = self.resolve(node)
+                if not target.exists():
+                    continue
+                if isinstance(node, Directory):
+                    if not target.is_dir():
+                        raise NotADirectoryError(target)
+                    expected = {
+                        self.relative_path(child).name
+                        for child in node.children
+                    }
+                    actual = {entry.name for entry in target.iterdir()}
+                    if actual != expected:
+                        raise OSError(f"physical directory does not match modeled children: {target}")
+                elif isinstance(node, File) and not target.is_file():
+                    raise IsADirectoryError(target)
 
         for node in nodes:
             self.delete(node)
