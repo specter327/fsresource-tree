@@ -89,10 +89,10 @@ class FSResourceTree(ResourceTree):
 
     @classmethod
     def from_dict(cls, data: dict) -> FSResourceTree:
-        from .model import resource_from_dict, validate_tree_payload
+        from .model import _resource_from_validated_dict, validate_tree_payload
 
         validate_tree_payload(data, cls.TYPE)
-        roots = [resource_from_dict(item) for item in data["roots"]]
+        roots = [_resource_from_validated_dict(item) for item in data["roots"]]
         return cls(name=data["name"], uid=data["uid"], roots=roots)
 
 
