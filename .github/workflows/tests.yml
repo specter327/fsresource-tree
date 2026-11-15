@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Check out filesystem specialization
+        uses: actions/checkout@v4
+        with:
+          path: fsresource-tree
+
+      - name: Check out minimum supported generic core
+        uses: actions/checkout@v4
+        with:
+          repository: specter327/resourcetree
+          ref: 68cec22c8f3543cf648dad1df41fe73a980ee089
+          path: resourcetree
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: fsresource-tree
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install ../resourcetree
+          python -m pip install --no-deps -e .
+
+      - name: Run tests
+        working-directory: fsresource-tree
+        run: python -m pytest -q

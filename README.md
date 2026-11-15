@@ -52,7 +52,7 @@ print(report.filename())
 print(tree.search(r"report"))
 ```
 
-A filesystem tree requires one or more `Directory` roots. A directory can contain only `Directory` and `File` instances. This prevents generic resources from entering a filesystem-specific model accidentally.
+Every registered filesystem root must be a `Directory`; an empty tree can be populated later. A directory can contain only `Directory` and `File` instances. This prevents generic resources from entering a filesystem-specific model accidentally.
 
 ## Serialization
 
