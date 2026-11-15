@@ -26,6 +26,8 @@ class File(Asset):
     ) -> None:
         if extension is not None and not isinstance(extension, str):
             raise TypeError("extension must be a string or None")
+        if parent is not None and not isinstance(parent, Directory):
+            raise TypeError("a File parent must be a Directory")
         super().__init__(
             name=name,
             parent=parent,
