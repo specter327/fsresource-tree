@@ -184,6 +184,11 @@ class FilesystemProvider:
         return Path(*(self._segment(n.filename() if isinstance(n, File) else n.name) for n in reversed(chain)))
 
     def resolve(self, resource: Directory | File, *, allow_missing: bool = True) -> Path:
+        """Return a checked path for display and diagnostics, not for physical I/O.
+
+        Path validation is inherently subject to TOCTOU races. Call create(),
+        exists(), delete(), delete_tree() or purge() for physical operations.
+        """
         relative = self.relative_path(resource)
         candidate = self._root.joinpath(relative)
         try:
