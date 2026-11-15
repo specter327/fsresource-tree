@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: specter327/resourcetree
-          ref: d605d9858b20d30971f2c40d3ae97ae27feb52c7
+          ref: d892a6c6d3f474e0dcf338211edfae65bd5f57a0
           path: resourcetree
 
       - name: Set up Python
