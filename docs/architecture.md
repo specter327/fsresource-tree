@@ -51,7 +51,7 @@ Recursive modeled deletion preflights the physical directory contents before mod
 
 ## Security boundary and remaining hardening
 
-The local provider rejects traversal components and symbolic links in existing path components. These path-based checks are defense in depth, not a complete defense against a hostile process concurrently mutating the same directory. Race-resistant descriptor-relative operations and Windows reparse-point handling require platform-specific implementations and validation. Do not treat this provider as a hardened sandbox against concurrent hostile filesystem mutation.
+The local provider rejects traversal components and symbolic links and Windows reparse points in existing path components. These path-based checks are defense in depth, not a complete defense against a hostile process concurrently mutating the same directory. Race-resistant descriptor-relative operations and Windows reparse-point handling require platform-specific implementations and validation. Do not treat this provider as a hardened sandbox against concurrent hostile filesystem mutation.
 
 ## Serialization
 
