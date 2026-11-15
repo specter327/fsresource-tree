@@ -187,3 +187,16 @@ def test_provider_context_manager_releases_its_root_descriptor(tmp_path):
         with provider:
             assert provider._root_fd == descriptor
         assert provider._root_fd is None
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
+def test_closed_descriptor_provider_fails_closed(tmp_path):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    item = File("payload", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    provider.close()
+
+    with pytest.raises(RuntimeError, match="closed"):
+        provider.exists(item)
