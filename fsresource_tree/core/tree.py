@@ -89,13 +89,10 @@ class FSResourceTree(ResourceTree):
 
     @classmethod
     def from_dict(cls, data: dict) -> FSResourceTree:
-        if not isinstance(data, dict):
-            raise TypeError("tree data must be a dictionary")
-        if data.get("type") != cls.TYPE:
-            raise ValueError(f"expected resource type {cls.TYPE!r}")
+        from .model import resource_from_dict, validate_tree_payload
 
-        from .model import resource_from_dict
-        roots = [resource_from_dict(item) for item in data.get("roots", [])]
+        validate_tree_payload(data, cls.TYPE)
+        roots = [resource_from_dict(item) for item in data["roots"]]
         return cls(name=data["name"], uid=data["uid"], roots=roots)
 
 
