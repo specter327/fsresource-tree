@@ -216,3 +216,62 @@ def test_filesystem_tree_rejects_non_string_serialized_resource_type():
 
     with pytest.raises(ValueError, match="unknown filesystem resource type"):
         FSResourceTree.from_dict(data)
+
+
+def _deep_serialized_tree(depth):
+    timestamp = "2024-01-01T00:00:00+00:00"
+    node = {
+        "type": "file",
+        "uid": "deep-file",
+        "name": "leaf",
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "metadata": {},
+        "data": None,
+        "extension": None,
+    }
+    for index in range(depth):
+        node = {
+            "type": "directory",
+            "uid": f"directory-{index}",
+            "name": f"directory-{index}",
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "metadata": {},
+            "children": [node],
+        }
+    return node
+
+
+def test_filesystem_tree_reconstruction_handles_hierarchies_deeper_than_recursion_limit():
+    depth = 1200
+    data = {
+        "type": FSResourceTree.TYPE,
+        "uid": "deep-tree",
+        "name": "deep-tree",
+        "roots": [_deep_serialized_tree(depth)],
+    }
+
+    restored = FSResourceTree.from_dict(data)
+
+    assert len(restored) == depth + 1
+    assert sum(1 for _ in restored.walk()) == depth + 1
+    assert isinstance(restored.roots[0], Directory)
+    node = restored.roots[0]
+    for _ in range(depth):
+        assert isinstance(node, Directory)
+        node = node.children[0]
+    assert isinstance(node, File)
+    assert node.uid == "deep-file"
+
+
+def test_directory_reconstruction_handles_hierarchies_deeper_than_recursion_limit():
+    depth = 1200
+    restored = Directory.from_dict(_deep_serialized_tree(depth))
+
+    assert isinstance(restored, Directory)
+    node = restored
+    for _ in range(depth):
+        assert isinstance(node, Directory)
+        node = node.children[0]
+    assert isinstance(node, File)
