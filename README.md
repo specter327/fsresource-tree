@@ -26,7 +26,7 @@ fsresource-tree
 
 ## Confined local provider
 
-The provider root must already exist and be a directory. The top-level model `Directory` represents that physical root; its name is not appended to the physical path. Descendants are resolved relative to it.
+The provider requires an explicit top-level model `Directory` and an existing physical directory. It binds that exact model object to the physical root; other independent model roots cannot be resolved through the same provider. The model root's name is not appended to the physical path. Descendants are resolved relative to it.
 
 ```python
 from pathlib import Path
@@ -39,14 +39,14 @@ with TemporaryDirectory() as temporary:
     root = Directory("workspace")
     documents = Directory("documents", parent=root)
     report = File("report", extension="txt", parent=documents)
-    provider = FilesystemProvider(Path(temporary))
+    provider = FilesystemProvider(Path(temporary), resource_root=root)
 
     create(root, provider=provider, recursive_children=True)
     assert exists(report, provider=provider)
     delete(report, provider=provider)
 ```
 
-Physical operations require an explicit provider. `path(resource)` returns a relative logical path and performs no I/O. `delete(..., recursive_children=True)` removes only modeled descendants; `purge=True` explicitly removes unmodeled physical contents under a modeled directory. The provider refuses to delete or purge its configured root and refuses symbolic links rather than following them.
+Each provider is bound to exactly one logical Directory root. A multi-root FSResourceTree therefore uses one provider mapping per physical root. Physical operations require an explicit provider. `path(resource)` returns a relative logical path and performs no I/O. `delete(..., recursive_children=True)` removes only modeled descendants; `purge=True` explicitly removes unmodeled physical contents under a modeled directory. The provider refuses to delete or purge its configured root and refuses symbolic links rather than following them.
 
 **Security boundary:** this provider enforces lexical confinement and checks existing path components for symbolic links. Path-based checks cannot eliminate every time-of-check/time-of-use race against a concurrent hostile process. Do not use it as a hardened sandbox against an attacker who can concurrently mutate the provider directory. Descriptor-relative, platform-specific operations are a separate hardening layer.
 
