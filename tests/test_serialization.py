@@ -207,3 +207,12 @@ def test_file_from_dict_rejects_container_fields_and_invalid_metadata():
     data["metadata"] = "invalid"
     with pytest.raises(TypeError, match="metadata must be a dictionary"):
         File.from_dict(data)
+
+
+def test_filesystem_tree_rejects_non_string_serialized_resource_type():
+    tree, _ = make_tree()
+    data = tree.to_dict()
+    data["roots"][0]["children"][0]["type"] = ["directory"]
+
+    with pytest.raises(ValueError, match="unknown filesystem resource type"):
+        FSResourceTree.from_dict(data)
