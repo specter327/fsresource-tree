@@ -144,3 +144,21 @@ def test_find_rejects_invalid_arguments():
         find(object(), "target")
     with pytest.raises(TypeError, match="target must be"):
         find(Directory("root"), None)
+
+
+def test_walk_validates_the_starting_resources_parent_link():
+    parent = Directory("parent")
+    child = Directory("child")
+    child._parent = parent
+
+    with pytest.raises(ValueError, match="inconsistent parent/child"):
+        list(walk(child))
+
+
+def test_ancestors_validates_parent_link_when_excluding_self():
+    parent = Directory("parent")
+    child = File("child")
+    child._parent = parent
+
+    with pytest.raises(ValueError, match="inconsistent parent/child"):
+        list(ancestors(child, include_self=False))
