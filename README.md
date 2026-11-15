@@ -46,9 +46,9 @@ with TemporaryDirectory() as temporary:
     delete(report, provider=provider)
 ```
 
-Each provider is bound to exactly one logical Directory root. A multi-root FSResourceTree therefore uses one provider mapping per physical root. Physical operations require an explicit provider. `path(resource)` returns a relative logical path and performs no I/O. `delete(..., recursive_children=True)` removes only modeled descendants; `purge=True` explicitly removes unmodeled physical contents under a modeled directory. The provider refuses to delete or purge its configured root and refuses symbolic links rather than following them.
+Each provider is bound to exactly one logical Directory root. A multi-root FSResourceTree therefore uses one provider mapping per physical root. Physical operations require an explicit provider. `path(resource)` returns a relative logical path and performs no I/O. `delete(..., recursive_children=True)` removes only modeled descendants; `purge=True` explicitly removes unmodeled physical contents under a modeled directory. The provider refuses to delete or purge its configured root and refuses symbolic links and Windows reparse points rather than following them.
 
-**Security boundary:** this provider enforces lexical confinement and checks existing path components for symbolic links. Path-based checks cannot eliminate every time-of-check/time-of-use race against a concurrent hostile process. Do not use it as a hardened sandbox against an attacker who can concurrently mutate the provider directory. Descriptor-relative, platform-specific operations are a separate hardening layer.
+**Security boundary:** this provider enforces lexical confinement and checks existing path components for symbolic links and Windows reparse points. Path-based checks cannot eliminate every time-of-check/time-of-use race against a concurrent hostile process. Do not use it as a hardened sandbox against an attacker who can concurrently mutate the provider directory. Descriptor-relative, platform-specific operations are a separate hardening layer.
 
 ## Generic core
 
