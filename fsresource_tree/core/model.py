@@ -50,7 +50,7 @@ def validate_resource_payload(
         seen_objects.add(identity)
 
         kind = node.get("type")
-        if kind not in {"directory", "file"}:
+        if not isinstance(kind, str) or kind not in {"directory", "file"}:
             raise ValueError(f"unknown filesystem resource type: {kind!r}")
         if is_root and kind not in allowed_root_types:
             expected = ", ".join(repr(item) for item in allowed_root_types)
