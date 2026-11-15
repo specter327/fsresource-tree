@@ -346,22 +346,102 @@ class FilesystemProvider:
         return True
 
     def purge(self, directory: Directory) -> bool:
-        """Remove a modeled directory and all physical descendants, without following links."""
-        import shutil
+        """Remove a modeled directory tree without following links.
 
-        target = self.resolve(directory)
-        if target == self._root:
+        On POSIX, traversal and removal are anchored to open directory descriptors.
+        The operation is confined against symlink substitution, but it is not an
+        atomic transaction if another process concurrently renames entries.
+        """
+        relative = self.relative_path(directory)
+        target = self._root / relative
+        if not relative.parts:
             raise PermissionError("the provider root cannot be purged")
+
+        if self.race_resistant:
+            parent_fd, name = self._open_parent_fd(relative)
+            target_fd = None
+            opened: list[int] = []
+            try:
+                try:
+                    info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    return False
+                if self._is_reparse_point(info) or not stat.S_ISDIR(info.st_mode):
+                    raise NotADirectoryError(target)
+                target_fd = os.open(
+                    name,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                    dir_fd=parent_fd,
+                )
+
+                # Complete a no-follow preflight before removing anything.
+                entries: list[tuple[tuple[str, ...], bool]] = []
+                stack: list[tuple[int, tuple[str, ...]]] = [(os.dup(target_fd), ())]
+                while stack:
+                    current_fd, prefix = stack.pop()
+                    opened.append(current_fd)
+                    for child_name in os.listdir(current_fd):
+                        child_info = os.stat(child_name, dir_fd=current_fd, follow_symlinks=False)
+                        if self._is_reparse_point(child_info):
+                            raise ValueError("purge refuses symbolic links and reparse points")
+                        child_parts = prefix + (child_name,)
+                        is_directory = stat.S_ISDIR(child_info.st_mode)
+                        entries.append((child_parts, is_directory))
+                        if is_directory:
+                            child_fd = os.open(
+                                child_name,
+                                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                                dir_fd=current_fd,
+                            )
+                            stack.append((child_fd, child_parts))
+
+                for child_parts, is_directory in sorted(entries, key=lambda item: len(item[0]), reverse=True):
+                    child_parent_fd, child_name = self._open_parent_at(target_fd, child_parts)
+                    try:
+                        try:
+                            child_info = os.stat(child_name, dir_fd=child_parent_fd, follow_symlinks=False)
+                        except FileNotFoundError:
+                            continue
+                        if self._is_reparse_point(child_info):
+                            raise ValueError("purge encountered a symbolic link or reparse point during removal")
+                        if is_directory:
+                            child_fd = os.open(
+                                child_name,
+                                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                                dir_fd=child_parent_fd,
+                            )
+                            os.close(child_fd)
+                            os.rmdir(child_name, dir_fd=child_parent_fd)
+                        else:
+                            os.unlink(child_name, dir_fd=child_parent_fd)
+                    finally:
+                        os.close(child_parent_fd)
+
+                current_info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                pinned_info = os.fstat(target_fd)
+                if (current_info.st_dev, current_info.st_ino) != (pinned_info.st_dev, pinned_info.st_ino):
+                    raise OSError("purge target was replaced during removal")
+                os.rmdir(name, dir_fd=parent_fd)
+                return True
+            finally:
+                for descriptor in opened:
+                    try:
+                        os.close(descriptor)
+                    except OSError:
+                        pass
+                if target_fd is not None:
+                    os.close(target_fd)
+                os.close(parent_fd)
+
         if not target.exists():
             return False
         if not target.is_dir() or target.is_symlink():
             raise NotADirectoryError(target)
-        # shutil.rmtree unlinks symlinks rather than traversing them. Reject them
-        # explicitly so destructive operations never silently cross link boundaries.
         for current, dirs, files in os.walk(target, topdown=True, followlinks=False):
             for name in (*dirs, *files):
                 item = Path(current) / name
                 if self._is_reparse_point(item.lstat()):
                     raise ValueError(f"purge refuses symbolic links and reparse points: {item}")
+        import shutil
         shutil.rmtree(target)
         return True
