@@ -33,7 +33,7 @@ def main() -> None:
             environment = root / "venv"
             venv.EnvBuilder(with_pip=True).create(environment)
             python = python_in(environment)
-            subprocess.check_call([str(python), "-m", "pip", "install", "--no-deps", args.core_wheel])
+            subprocess.check_call([str(python), "-m", "pip", "install", args.core_wheel])
             subprocess.check_call([str(python), "-m", "pip", "install", "--no-deps", artifact])
             code = (
                 "from importlib import metadata; import fsresource_tree as package; "
