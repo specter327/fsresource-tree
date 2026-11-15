@@ -59,3 +59,45 @@ def test_file_remains_a_terminal_resource():
     assert not isinstance(file, resourcetree.Container)
     assert not hasattr(file, "append_child")
     assert not hasattr(file, "children")
+
+def test_filesystem_tree_add_roots_is_atomic_when_a_root_is_invalid():
+    tree = FSResourceTree()
+    valid_root = Directory("valid")
+    invalid_root = File("not-a-directory")
+
+    with pytest.raises(TypeError, match="roots must be Directory"):
+        tree.add_roots([valid_root, invalid_root])
+
+    assert tree.roots == ()
+    assert len(tree) == 0
+    assert valid_root.tree is None
+    assert invalid_root.tree is None
+
+
+def test_filesystem_tree_rejects_duplicate_uids_without_partial_registration():
+    tree = FSResourceTree()
+    first = Directory("first", uid="duplicate")
+    second = Directory("second", uid="duplicate")
+
+    with pytest.raises(ValueError, match="duplicate resource uid"):
+        tree.add_roots([first, second])
+
+    assert tree.roots == ()
+    assert len(tree) == 0
+    assert first.tree is None
+    assert second.tree is None
+
+
+def test_managed_directory_rejects_generic_children_without_index_mutation():
+    root = Directory("root")
+    tree = FSResourceTree(roots=[root])
+    invalid = resourcetree.Asset("generic")
+
+    with pytest.raises(TypeError, match="only Directory or File"):
+        root.append_child(invalid)
+
+    assert root.children == ()
+    assert invalid.parent is None
+    assert invalid.tree is None
+    assert len(tree) == 1
+
