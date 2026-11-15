@@ -1,29 +1,14 @@
 [project]
-
 name = "fsresource-tree"
-version = "0.3.0"
-
+version = "0.4.0"
 description = "Filesystem specialization for the generic resourcetree framework"
-
 readme = "README.md"
-
 requires-python = ">=3.11"
-
-dependencies = [
-    "resourcetree>=0.5.0"
-]
-
+dependencies = ["resourcetree>=0.5.0"]
 
 [tool.setuptools.packages.find]
-
 where = ["."]
 
-
 [build-system]
-
-requires = [
-    "setuptools",
-    "wheel"
-]
-
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
