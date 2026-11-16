@@ -2,8 +2,8 @@ from datetime import timezone
 
 import pytest
 
-from fsresource_tree import Directory, File, PhysicalProfile
-from fsresource_tree.providers import FilesystemProvider
+from fsresourcetree import Directory, File, PhysicalProfile
+from fsresourcetree.providers import FilesystemProvider
 
 
 def test_file_profile_returns_metadata_without_mutating_resource(tmp_path):
