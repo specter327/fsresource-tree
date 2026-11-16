@@ -164,7 +164,7 @@ Common metadata candidates include:
 
 These values are observations, not immutable model identity. The model must distinguish cached values from freshly queried physical values.
 
-Decision helpers such as `is_readable()`, `is_writable()` and `is_executable()` must ask the provider about the relevant effective security context. They must not infer effective access solely from Unix mode bits or a portable permission abstraction. The API should allow an explicit user/security identity where the platform supports it and clearly state when only the current process identity can be checked.
+Decision helpers `readable()`, `writable()` and `executable()` (also exposed as resource methods and `is_*` aliases) ask the provider about access for the current process identity. POSIX uses effective UID/GID checks when Python exposes them; Windows follows the native `os.access()` semantics and is not a general ACL evaluator. Arbitrary user/group impersonation is not implemented. The helpers do not infer access solely from Unix mode bits or cached profile metadata. A missing entry returns `False`; unsafe links and other I/O errors remain errors. These point-in-time checks are advisory and are not authorization guarantees for later operations.
 
 ### Effective access query semantics
 
