@@ -39,6 +39,12 @@ class FilesystemProvider:
         if self._is_reparse_point(root_info) or not candidate.is_dir():
             raise NotADirectoryError(candidate)
         self._root = candidate.resolve(strict=True)
+        resolved_root_info = self._root.lstat()
+        if self._is_reparse_point(resolved_root_info) or not stat.S_ISDIR(resolved_root_info.st_mode):
+            raise NotADirectoryError(self._root)
+        # Windows does not pin the root with a directory handle. Retain its
+        # filesystem identity so path-based operations can reject replacement.
+        self._root_identity = (resolved_root_info.st_dev, resolved_root_info.st_ino)
         self._descriptor_mode = (
             os.name == "posix"
             and hasattr(os, "O_NOFOLLOW")
@@ -183,12 +189,37 @@ class FilesystemProvider:
         # The top-level Directory represents the provider root itself.
         return Path(*(self._segment(n.filename() if isinstance(n, File) else n.name) for n in reversed(chain)))
 
+    def _validate_path_based_root(self) -> None:
+        """Reject a replaced root or reparse point in its absolute path.
+
+        This is a pre-operation path check, not a race-free Windows boundary:
+        a hostile process can still mutate path components after validation.
+        """
+        components = [*reversed(self._root.parents), self._root]
+        for component in components:
+            try:
+                info = component.lstat()
+            except FileNotFoundError:
+                raise FileNotFoundError(component) from None
+            if self._is_reparse_point(info):
+                raise ValueError(
+                    f"configured filesystem root contains a symbolic link or reparse point: {component}"
+                )
+            if not stat.S_ISDIR(info.st_mode):
+                raise NotADirectoryError(component)
+            if component == self._root:
+                identity = (info.st_dev, info.st_ino)
+                if identity != self._root_identity:
+                    raise ValueError("configured filesystem root was replaced after provider construction")
+
     def resolve(self, resource: Directory | File, *, allow_missing: bool = True) -> Path:
         """Return a checked path for display and diagnostics, not for physical I/O.
 
         Path validation is inherently subject to TOCTOU races. Call create(),
         exists(), delete(), delete_tree() or purge() for physical operations.
         """
+        if not self.race_resistant:
+            self._validate_path_based_root()
         relative = self.relative_path(resource)
         candidate = self._root.joinpath(relative)
         try:

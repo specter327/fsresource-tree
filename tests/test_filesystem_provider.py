@@ -355,3 +355,66 @@ def test_path_based_operations_reject_reparse_point_ancestors(
         assert (physical_parent / "payload").read_text(encoding="utf-8") == "protected"
     else:
         assert (physical_parent / "target").is_dir()
+
+
+@pytest.mark.parametrize("operation", ["create", "delete", "purge"])
+@pytest.mark.parametrize("root_attack", ["reparse", "replacement"])
+def test_path_based_operations_reject_replaced_configured_root(
+    tmp_path, monkeypatch, operation, root_attack
+):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    folder = Directory("folder", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    provider.close()
+    provider._descriptor_mode = False
+
+    if operation == "create":
+        resource = File("payload", parent=folder)
+    elif operation == "delete":
+        (root / "folder").mkdir()
+        (root / "folder" / "payload").write_text("protected", encoding="utf-8")
+        resource = File("payload", parent=folder)
+    else:
+        (root / "folder").mkdir()
+        (root / "folder" / "keep").write_text("protected", encoding="utf-8")
+        resource = folder
+
+    original_lstat = Path.lstat
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    original_root_info = root.lstat()
+
+    def fake_lstat(path):
+        if path == root:
+            if root_attack == "reparse":
+                return SimpleNamespace(
+                    st_mode=original_root_info.st_mode,
+                    st_dev=original_root_info.st_dev,
+                    st_ino=original_root_info.st_ino,
+                    st_file_attributes=reparse_flag,
+                )
+            return SimpleNamespace(
+                st_mode=original_root_info.st_mode,
+                st_dev=original_root_info.st_dev,
+                st_ino=original_root_info.st_ino + 1,
+                st_file_attributes=0,
+            )
+        return original_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+
+    with pytest.raises(ValueError, match="reparse point|was replaced"):
+        if operation == "create":
+            provider.create(resource)
+        elif operation == "delete":
+            provider.delete(resource)
+        else:
+            provider.purge(resource)
+
+    if operation == "create":
+        assert not (root / "folder" / "payload").exists()
+    elif operation == "delete":
+        assert (root / "folder" / "payload").read_text(encoding="utf-8") == "protected"
+    else:
+        assert (root / "folder" / "keep").read_text(encoding="utf-8") == "protected"
