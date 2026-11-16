@@ -418,3 +418,22 @@ def test_path_based_operations_reject_replaced_configured_root(
         assert (root / "folder" / "payload").read_text(encoding="utf-8") == "protected"
     else:
         assert (root / "folder" / "keep").read_text(encoding="utf-8") == "protected"
+
+
+def test_provider_rejects_root_replacement_during_initialization(tmp_path, monkeypatch):
+    root = tmp_path / "sandbox"
+    replacement = tmp_path / "replacement"
+    root.mkdir()
+    replacement.mkdir()
+    model = Directory("root")
+    original_resolve = Path.resolve
+
+    def replace_during_resolution(path, *args, **kwargs):
+        if path == root:
+            return replacement
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", replace_during_resolution)
+
+    with pytest.raises(ValueError, match="changed during provider initialization"):
+        FilesystemProvider(root, resource_root=model)

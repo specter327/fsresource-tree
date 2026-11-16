@@ -38,13 +38,17 @@ class FilesystemProvider:
             raise FileNotFoundError(candidate) from None
         if self._is_reparse_point(root_info) or not candidate.is_dir():
             raise NotADirectoryError(candidate)
+        initial_identity = (root_info.st_dev, root_info.st_ino)
         self._root = candidate.resolve(strict=True)
         resolved_root_info = self._root.lstat()
         if self._is_reparse_point(resolved_root_info) or not stat.S_ISDIR(resolved_root_info.st_mode):
             raise NotADirectoryError(self._root)
-        # Windows does not pin the root with a directory handle. Retain its
-        # filesystem identity so path-based operations can reject replacement.
-        self._root_identity = (resolved_root_info.st_dev, resolved_root_info.st_ino)
+        resolved_identity = (resolved_root_info.st_dev, resolved_root_info.st_ino)
+        if resolved_identity != initial_identity:
+            raise ValueError("configured filesystem root changed during provider initialization")
+        # Retain the identity for path-based checks and verify it again after
+        # opening the POSIX descriptor, closing the initialization race.
+        self._root_identity = resolved_identity
         self._descriptor_mode = (
             os.name == "posix"
             and hasattr(os, "O_NOFOLLOW")
@@ -54,7 +58,16 @@ class FilesystemProvider:
         self._root_fd: int | None = None
         if self._descriptor_mode:
             flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
-            self._root_fd = os.open(self._root, flags)
+            descriptor = os.open(self._root, flags)
+            try:
+                opened_info = os.fstat(descriptor)
+                opened_identity = (opened_info.st_dev, opened_info.st_ino)
+                if opened_identity != self._root_identity:
+                    raise ValueError("configured filesystem root changed before descriptor pinning")
+            except BaseException:
+                os.close(descriptor)
+                raise
+            self._root_fd = descriptor
 
     @property
     def race_resistant(self) -> bool:
