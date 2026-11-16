@@ -37,6 +37,8 @@ def test_public_exports_are_importable():
         "ResourceAlreadyRegisteredError",
         "InvalidParentError",
         "UnsupportedOperationError",
+        "ProviderNotConfiguredError",
+        "UnsupportedPlatformError",
     }
 
     assert set(fs.__all__) == expected
