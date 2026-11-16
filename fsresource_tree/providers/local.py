@@ -9,8 +9,13 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from ..profile import PhysicalProfile
+from .contract import ProviderCapabilities
 
 if TYPE_CHECKING:
     from ..core.directory import Directory
@@ -31,6 +36,7 @@ class FilesystemProvider:
         if not isinstance(resource_root, Directory):
             raise TypeError("resource_root must be a Directory")
         self._resource_root = resource_root
+        self._platform = "termux" if os.environ.get("TERMUX_VERSION") else sys.platform
         candidate = Path(root).expanduser()
         try:
             root_info = candidate.lstat()
@@ -73,6 +79,32 @@ class FilesystemProvider:
     def race_resistant(self) -> bool:
         """Whether physical operations are anchored to a POSIX directory descriptor."""
         return self._descriptor_mode
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Describe operations and metadata supported by this provider instance."""
+        metadata_fields = {
+            "exists", "entry_type", "size", "last_access_time",
+            "last_modified_time", "permissions", "device_id", "inode",
+            "link_count",
+        }
+        if hasattr(os.stat_result, "st_birthtime") or os.name == "nt":
+            metadata_fields.add("creation_time")
+        if hasattr(os.stat_result, "st_uid"):
+            metadata_fields.add("owner_id")
+        if hasattr(os.stat_result, "st_gid"):
+            metadata_fields.add("group_id")
+        if hasattr(os.stat_result, "st_flags"):
+            metadata_fields.add("native_attributes")
+        if hasattr(os.stat_result, "st_file_attributes"):
+            metadata_fields.add("native_attributes")
+        return ProviderCapabilities(
+            platform=self._platform,
+            filesystem=None,
+            race_resistant=self.race_resistant,
+            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile"}),
+            metadata_fields=frozenset(metadata_fields),
+        )
 
     def close(self) -> None:
         """Release the provider's pinned root directory descriptor."""
@@ -167,16 +199,19 @@ class FilesystemProvider:
     def _segment(value: str) -> str:
         if not isinstance(value, str) or not value or value in {".", ".."}:
             raise ValueError("resource names must be non-empty path components")
-        if "/" in value or chr(92) in value or any(char in value for char in '<>:"|?*'):
-            raise ValueError(f"resource name is not a portable path component: {value!r}")
-        if chr(0) in value or value.endswith((" ", ".")):
-            raise ValueError("resource names cannot contain NUL or end with a space or dot")
-        device_name = value.split(".", 1)[0].upper()
-        reserved = {"CON", "PRN", "AUX", "NUL"} | {
-            f"{prefix}{index}" for prefix in ("COM", "LPT") for index in range(1, 10)
-        }
-        if device_name in reserved:
-            raise ValueError(f"resource name is reserved on Windows: {value!r}")
+        if "/" in value or chr(0) in value:
+            raise ValueError(f"resource name is not a valid path component: {value!r}")
+        if os.name == "nt":
+            if chr(92) in value or any(char in value for char in '<>:"|?*'):
+                raise ValueError(f"resource name is not a valid Windows path component: {value!r}")
+            if value.endswith((" ", ".")):
+                raise ValueError("Windows resource names cannot end with a space or dot")
+            device_name = value.split(".", 1)[0].upper()
+            reserved = {"CON", "PRN", "AUX", "NUL"} | {
+                f"{prefix}{index}" for prefix in ("COM", "LPT") for index in range(1, 10)
+            }
+            if device_name in reserved:
+                raise ValueError(f"resource name is reserved on Windows: {value!r}")
         return value
 
     def relative_path(self, resource: Directory | File) -> Path:
@@ -221,6 +256,15 @@ class FilesystemProvider:
             if not stat.S_ISDIR(info.st_mode):
                 raise NotADirectoryError(component)
             if component == self._root:
+                # Windows may report st_ino == 0 when the filesystem cannot
+                # provide a stable file index. In that case a replacement on
+                # the same volume cannot be distinguished from the original
+                # directory, so path-based operations must fail closed.
+                if not info.st_ino or not self._root_identity[1]:
+                    raise ValueError(
+                        "configured filesystem root has no stable file identity; "
+                        "refusing path-based operation"
+                    )
                 identity = (info.st_dev, info.st_ino)
                 if identity != self._root_identity:
                     raise ValueError("configured filesystem root was replaced after provider construction")
@@ -266,13 +310,9 @@ class FilesystemProvider:
         from ..core.file import File
 
         relative = self.relative_path(resource)
-        target = self._root / relative
         if not self.race_resistant:
-            # Validate every existing component (including the leaf) before
-            # path-based operations. This rejects Windows junctions and other
-            # reparse points in ancestors; it is not race-resistant against a
-            # concurrent replacement after validation.
             self.resolve(resource)
+        target = self._root / relative
         if isinstance(resource, Directory):
             if self.race_resistant:
                 if not relative.parts:
@@ -518,8 +558,7 @@ class FilesystemProvider:
                     os.close(target_fd)
                 os.close(parent_fd)
 
-        # Do not let exists(), os.walk() or shutil.rmtree() traverse a junction
-        # or symlink in any component of the target path.
+        # Validate every existing ancestor before path-based filesystem I/O.
         self.resolve(directory)
         if not target.exists():
             return False
@@ -533,3 +572,66 @@ class FilesystemProvider:
         import shutil
         shutil.rmtree(target)
         return True
+
+
+    def profile(self, resource: Directory | File) -> PhysicalProfile:
+        """Observe physical metadata without opening or reading file contents.
+
+        Missing entries produce an explicit exists=False snapshot. Other
+        operating-system errors propagate unchanged. Symbolic links and
+        reparse points are rejected rather than followed.
+        """
+        from ..core.directory import Directory
+        from ..core.file import File
+
+        if not isinstance(resource, (Directory, File)):
+            raise TypeError("resource must be a Directory or File")
+        relative = self.relative_path(resource)
+        try:
+            if self.race_resistant:
+                info = self._stat_relative(relative)
+            else:
+                info = self.resolve(resource).lstat()
+        except FileNotFoundError:
+            return PhysicalProfile(exists=False, observed_at=datetime.now(timezone.utc))
+
+        if self._is_reparse_point(info):
+            raise ValueError("cannot profile a symbolic link or reparse point")
+        if isinstance(resource, Directory) and not stat.S_ISDIR(info.st_mode):
+            raise NotADirectoryError(self._root / relative)
+        if isinstance(resource, File) and not stat.S_ISREG(info.st_mode):
+            raise IsADirectoryError(self._root / relative)
+
+        if stat.S_ISDIR(info.st_mode):
+            entry_type = "directory"
+        elif stat.S_ISREG(info.st_mode):
+            entry_type = "file"
+        else:
+            raise ValueError("unsupported physical filesystem entry type")
+
+        def timestamp(name: str):
+            value = getattr(info, name, None)
+            return datetime.fromtimestamp(value, timezone.utc) if value is not None else None
+
+        native = tuple(
+            (name, int(getattr(info, name)))
+            for name in ("st_flags", "st_file_attributes")
+            if getattr(info, name, None) is not None
+        )
+        return PhysicalProfile(
+            exists=True,
+            observed_at=datetime.now(timezone.utc),
+            entry_type=entry_type,
+            size=info.st_size,
+            last_access_time=timestamp("st_atime"),
+            last_modified_time=timestamp("st_mtime"),
+            creation_time=timestamp("st_birthtime")
+            or (timestamp("st_ctime") if os.name == "nt" else None),
+            permissions=stat.S_IMODE(info.st_mode),
+            owner_id=getattr(info, "st_uid", None),
+            group_id=getattr(info, "st_gid", None),
+            device_id=info.st_dev,
+            inode=info.st_ino,
+            link_count=info.st_nlink,
+            native_attributes=native,
+        )

@@ -5,10 +5,13 @@ from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
 from .core.tree import FSResourceTree
-from .providers import FilesystemProvider
+from .factory import FilesystemResourceType, resource_from_path, validate_path
+from .providers import FilesystemProvider, FilesystemProviderProtocol, ProviderCapabilities
+from .profile import PhysicalProfile
 from .exceptions import (
     InvalidParentError,
     ResourceAlreadyRegisteredError,
+    UnsupportedOperationError,
     ResourceNotFoundError,
     ResourceTreeError,
 )
@@ -21,10 +24,17 @@ __all__ = [
     "Directory",
     "FSResourceTree",
     "FilesystemProvider",
+    "FilesystemProviderProtocol",
+    "ProviderCapabilities",
+    "PhysicalProfile",
+    "FilesystemResourceType",
+    "resource_from_path",
+    "validate_path",
     "operations",
     "renderers",
     "ResourceTreeError",
     "ResourceNotFoundError",
     "ResourceAlreadyRegisteredError",
     "InvalidParentError",
+    "UnsupportedOperationError",
 ]

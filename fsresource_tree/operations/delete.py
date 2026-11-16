@@ -2,22 +2,23 @@
 
 from ..core.directory import Directory
 from ..core.file import File
-from ..providers import FilesystemProvider
+from ..providers import FilesystemProviderProtocol, require_provider_operation
 
 
 def delete(
     resource: Directory | File,
     *,
-    provider: FilesystemProvider,
+    provider: FilesystemProviderProtocol,
     recursive_children: bool = False,
     purge: bool = False,
 ) -> bool:
-    if not isinstance(provider, FilesystemProvider):
-        raise TypeError("provider must be a FilesystemProvider")
     if purge:
         if not isinstance(resource, Directory):
             raise TypeError("purge requires a Directory")
-        return provider.purge(resource)
+        purge_physical = require_provider_operation(provider, "purge")
+        return purge_physical(resource)
     if recursive_children:
-        return provider.delete_tree(resource)
-    return provider.delete(resource)
+        delete_tree_physical = require_provider_operation(provider, "delete_tree")
+        return delete_tree_physical(resource)
+    delete_physical = require_provider_operation(provider, "delete")
+    return delete_physical(resource)

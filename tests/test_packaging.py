@@ -19,12 +19,19 @@ def test_public_exports_are_importable():
         "Directory",
         "FSResourceTree",
         "FilesystemProvider",
+        "FilesystemProviderProtocol",
+        "ProviderCapabilities",
+        "PhysicalProfile",
+        "FilesystemResourceType",
+        "resource_from_path",
+        "validate_path",
         "operations",
         "renderers",
         "ResourceTreeError",
         "ResourceNotFoundError",
         "ResourceAlreadyRegisteredError",
         "InvalidParentError",
+        "UnsupportedOperationError",
     }
 
     assert set(fs.__all__) == expected
@@ -37,6 +44,9 @@ def test_runtime_subpackages_are_importable():
         "fsresource_tree.core",
         "fsresource_tree.operations",
         "fsresource_tree.providers",
+        "fsresource_tree.providers.contract",
+        "fsresource_tree.profile",
+        "fsresource_tree.factory",
         "fsresource_tree.renderers",
     ):
         assert import_module(module) is not None

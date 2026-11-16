@@ -37,6 +37,17 @@ class Directory(Container):
         validate_resource_payload(data, allowed_root_types=("directory",))
         return _resource_from_validated_dict(data)
 
+    @property
+    def physical_profile(self):
+        """Latest explicitly cached physical metadata observation, if any."""
+        return getattr(self, "_physical_profile", None)
+
+    def profile(self, *, provider, update_cache: bool = False):
+        """Query physical metadata through an explicit FilesystemProvider."""
+        from ..operations.profile import profile
+
+        return profile(self, provider=provider, update_cache=update_cache)
+
     def __repr__(self) -> str:
         return (
             f"Directory(uid={self.uid!r}, name={self.name!r}, "
