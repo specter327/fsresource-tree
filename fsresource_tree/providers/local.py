@@ -223,6 +223,12 @@ class FilesystemProvider:
 
         relative = self.relative_path(resource)
         target = self._root / relative
+        if not self.race_resistant:
+            # Validate every existing component (including the leaf) before
+            # path-based operations. This rejects Windows junctions and other
+            # reparse points in ancestors; it is not race-resistant against a
+            # concurrent replacement after validation.
+            self.resolve(resource)
         if isinstance(resource, Directory):
             if self.race_resistant:
                 if not relative.parts:
@@ -287,6 +293,8 @@ class FilesystemProvider:
         target = self._root / relative
         if not relative.parts:
             raise PermissionError("the provider root cannot be deleted")
+        if not self.race_resistant:
+            self.resolve(resource)
         if self.race_resistant:
             parent_fd, name = self._open_parent_fd(relative)
             try:
@@ -466,6 +474,7 @@ class FilesystemProvider:
                     os.close(target_fd)
                 os.close(parent_fd)
 
+        self.resolve(directory)
         if not target.exists():
             return False
         if not target.is_dir() or target.is_symlink():
