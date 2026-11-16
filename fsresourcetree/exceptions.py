@@ -1,23 +1,42 @@
-"""Excepciones propias de resource_tree."""
+"""Exceptions raised by fsresourcetree."""
 
 from __future__ import annotations
 
 
 class ResourceTreeError(Exception):
-    """Excepción base para errores de la librería."""
+    """Base exception for filesystem resource errors."""
 
 
 class ResourceNotFoundError(ResourceTreeError, KeyError):
-    """No existe un recurso registrado con el uid solicitado."""
+    """No resource with the requested UID is registered."""
 
 
 class ResourceAlreadyRegisteredError(ResourceTreeError, ValueError):
-    """El recurso ya está registrado en el árbol."""
+    """The resource is already registered in the tree."""
 
 
 class InvalidParentError(ResourceTreeError, ValueError):
-    """El parent indicado no es un Directory válido o no está registrado."""
+    """The supplied parent is not a valid or registered Directory."""
 
 
 class UnsupportedOperationError(ResourceTreeError, NotImplementedError):
     """The selected provider does not support a requested filesystem operation."""
+
+
+class ProviderNotConfiguredError(ResourceTreeError, RuntimeError):
+    """The resource is not associated with a configured filesystem provider."""
+
+
+class UnsupportedPlatformError(ResourceTreeError, OSError):
+    """The current runtime platform has no supported filesystem provider."""
+
+
+__all__ = [
+    "ResourceTreeError",
+    "ResourceNotFoundError",
+    "ResourceAlreadyRegisteredError",
+    "InvalidParentError",
+    "UnsupportedOperationError",
+    "ProviderNotConfiguredError",
+    "UnsupportedPlatformError",
+]
