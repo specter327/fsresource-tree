@@ -1,7 +1,7 @@
 """Filesystem specialization built on top of the generic resourcetree core."""
 
 from . import operations, renderers
-from .operations import ScanResult, scan
+from .operations import ScanResult, copy, move, rename, scan
 from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
@@ -33,6 +33,9 @@ __all__ = [
     "validate_path",
     "operations",
     "scan",
+    "copy",
+    "move",
+    "rename",
     "ScanResult",
     "renderers",
     "ResourceTreeError",

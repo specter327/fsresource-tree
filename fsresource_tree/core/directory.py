@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..providers import FilesystemProviderProtocol
+
+from .resource_operations import FilesystemResourceOperations
 
 from resourcetree import Container
 
 
-class Directory(Container):
+class Directory(FilesystemResourceOperations, Container):
     """A filesystem directory modeled as a generic Container."""
 
     TYPE = "directory"
@@ -47,6 +52,34 @@ class Directory(Container):
         from ..operations.profile import profile
 
         return profile(self, provider=provider, update_cache=update_cache)
+
+
+    def scan(
+        self,
+        *,
+        provider: FilesystemProviderProtocol,
+        recursive: bool = True,
+        excluded_names: set[str] | frozenset[str] = frozenset(),
+        exclude=None,
+        on_error: str = "raise",
+    ):
+        """Discover physical descendants and materialize them under this directory."""
+        from ..operations.scan import scan
+
+        return scan(
+            self,
+            provider=provider,
+            recursive=recursive,
+            excluded_names=excluded_names,
+            exclude=exclude,
+            on_error=on_error,
+        )
+
+    def purge(self, *, provider: FilesystemProviderProtocol) -> bool:
+        """Remove this physical directory and all its descendants."""
+        from ..operations.delete import delete
+
+        return delete(self, provider=provider, purge=True)
 
     def __repr__(self) -> str:
         return (

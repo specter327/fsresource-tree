@@ -7,9 +7,10 @@ from typing import Any
 from resourcetree import Asset
 
 from .directory import Directory
+from .resource_operations import FilesystemResourceOperations
 
 
-class File(Asset):
+class File(FilesystemResourceOperations, Asset):
     """A filesystem file modeled as a generic terminal Asset."""
 
     TYPE = "file"

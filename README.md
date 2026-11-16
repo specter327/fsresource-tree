@@ -42,7 +42,7 @@ Filesystem manipulation is within the package's scope. Permitted operation categ
 - Listing directory contents and materializing filesystem entries as `File` and `Directory` resources.
 - Other filesystem-management operations that do not read or write file contents.
 
-This defines the package boundary; it does **not** claim that every permitted operation is already implemented. The current public physical-operation API provides `create()`, `exists()` and `delete()` (including modeled recursive deletion and explicit `purge()`). Logical `path()`, `walk()` and `find()` operate on the in-memory model. Path materialization is provided by `validate_path()` and `resource_from_path()`. Public recursive physical discovery is available through `operations.scan()` (also exported as `fsresource_tree.scan`). It is additive, reuses matching resources, supports exclusions and never follows links. Public copy, move and rename operations are not implemented yet. Metadata profiling is available through `profile()`.
+This defines the package boundary; it does **not** claim that every permitted operation is already implemented. The public physical-operation API provides `create()`, `exists()`, `delete()`, `copy()`, `move()` and `rename()` (including modeled recursive deletion and explicit `purge()`). Logical `path()`, `walk()` and `find()` operate on the in-memory model. Path materialization is provided by `validate_path()` and `resource_from_path()`. Public recursive physical discovery is available through `operations.scan()` (also exported as `fsresource_tree.scan`). It is additive, reuses matching resources, supports exclusions and never follows links. Metadata profiling is available through `profile()`.
 
 The content boundary excludes APIs for reading, writing, appending, overwriting, streaming or hashing file contents. An opaque filesystem copy operation is a separate management operation explicitly permitted by the project: it transfers an entry without exposing its bytes to the caller or adding content-access methods to the resource model. Metadata profiling uses stat-style metadata only.
 
@@ -91,6 +91,45 @@ file = File("report", extension="txt", parent=directory)
 ```
 
 This distinction is intentional: paths are inputs to validation and filesystem operations, names initialize model objects, and resource objects are the library's working unit.
+
+### Physical copy, move and rename
+
+All three operations require an explicit provider and resource objects:
+
+```python
+from fsresource_tree import copy, move, rename
+
+rename(report, "annual-report", provider=provider)
+move(report, archive_directory, provider=provider)
+duplicate = copy(report, backup_directory, provider=provider, new_name="report-backup")
+```
+
+Move and rename preserve the resource UID and update the in-memory parent/name after the physical operation succeeds. Copy creates new resource identities. Directory copies reproduce the modeled subtree only; run `scan()` first if the model must reflect all physical descendants. Existing copy targets are refused rather than intentionally overwritten. File data is transferred internally by the provider; no bytes are returned and no file-content accessor is added. The local provider copies regular files and creates directories exclusively. Cross-volume moves are not converted into copy-and-delete operations. The current implementation does not promise an atomic transaction against hostile concurrent filesystem mutation; Windows remains path-based, and POSIX descriptor-relative operations still have the provider's documented concurrent-rename limitations.
+
+### Resource instance methods
+
+The module-level operations remain available, but common physical operations are also exposed directly on each resource. This is a convenience facade: every method delegates to the same operations layer and still requires an explicit provider.
+
+```python
+from fsresource_tree import Directory, File, FilesystemProvider
+
+root = Directory("workspace")
+report = File("report", extension="txt", parent=root)
+
+with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
+    report.create(provider=provider)
+    if report.exists(provider=provider):
+        report.rename("annual-report", provider=provider)
+
+    backup = report.copy(root, provider=provider, new_name="backup")
+    backup.delete(provider=provider)
+
+    # Directory-only operations:
+    scan_result = root.scan(provider=provider, recursive=True)
+    root.purge(provider=provider)
+```
+
+Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, and `copy()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is deliberately explicit; resources do not silently retain a provider or filesystem-root binding. Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
 
 ## Generic core
 

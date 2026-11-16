@@ -185,11 +185,12 @@ The following describes code that exists now, not the target architecture above.
 - Model: `File`, `Directory`, `FSResourceTree`; generic metadata and hierarchy; specialized dict/JSON/XML serialization.
 - Materialization: `validate_path()` and `resource_from_path()` classify and materialize one existing entry.
 - Provider: one `FilesystemProvider`, explicitly configured with a physical root and logical Directory root.
-- Public physical operations: `create()`, `exists()`, `delete()`; provider also implements modeled recursive deletion and explicit `purge()`.
+- Public physical operations: `create()`, `exists()`, `delete()`, `copy()`, `move()` and `rename()`; provider also implements modeled recursive deletion and explicit `purge()`. Copy reproduces the modeled subtree only, assigns fresh UIDs and refuses existing targets; move/rename preserve UIDs. Cross-volume moves are not emulated.
 - In-memory operations: logical `path()`, `walk()`, `find()` and ancestor traversal.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
 - Implemented: public physical directory scanning via `operations.scan()` with recursive discovery, exclusions, additive reconciliation, no-follow entry classification and configurable error handling.
-- Not implemented yet: platform-specific provider classes and loader, public copy/move/rename, effective-access helpers, monitoring/listeners and change events.
+- Implemented: public copy/move/rename operations. The local provider uses descriptor-relative POSIX move and opaque regular-file copy where available; directory copy is model-driven and creates destination directories exclusively. The Windows branch remains path-based. These operations are not atomic transactions against hostile concurrent filesystem mutation.
+- Not implemented yet: platform-specific provider classes and loader, effective-access helpers, monitoring/listeners and change events.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
