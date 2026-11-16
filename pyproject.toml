@@ -7,11 +7,11 @@ requires-python = ">=3.11"
 dependencies = ["resourcetree>=0.5.0"]
 
 [tool.setuptools.dynamic]
-version = { attr = "fsresource_tree.__version__" }
+version = { attr = "fsresourcetree.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["fsresource_tree", "fsresource_tree.*"]
+include = ["fsresourcetree", "fsresourcetree.*"]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

@@ -1,7 +1,7 @@
 import pytest
 import resourcetree
 
-from fsresource_tree import Directory, File, FSResourceTree
+from fsresourcetree import Directory, File, FSResourceTree
 
 
 @pytest.mark.parametrize("resource_type", [File, Directory])

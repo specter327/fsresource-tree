@@ -1,7 +1,7 @@
 import pytest
 import resourcetree
 
-import fsresource_tree as fs
+import fsresourcetree as fs
 
 
 def test_filesystem_models_inherit_generic_core():

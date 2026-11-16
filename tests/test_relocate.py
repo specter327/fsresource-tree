@@ -1,7 +1,7 @@
 import pytest
 
-from fsresource_tree import Directory, FSResourceTree, File, FilesystemProvider
-from fsresource_tree.operations import copy, move, rename
+from fsresourcetree import Directory, FSResourceTree, File, FilesystemProvider
+from fsresourcetree.operations import copy, move, rename
 
 
 def test_rename_preserves_identity_and_updates_physical_name(tmp_path):

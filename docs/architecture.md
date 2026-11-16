@@ -2,7 +2,7 @@
 
 ## 1. Purpose and boundaries
 
-`fsresource-tree` represents filesystem resources and provides controlled operations over real filesystem entries. It is not merely an in-memory tree, but its model must remain usable without touching the host filesystem.
+`fsresourcetree` represents filesystem resources and provides controlled operations over real filesystem entries. It is not merely an in-memory tree, but its model must remain usable without touching the host filesystem.
 
 The package has one non-negotiable I/O boundary:
 
@@ -21,7 +21,7 @@ resourcetree
 │   └── Container
 └── ResourceTree
 
-fsresource-tree
+fsresourcetree
 ├── File(Asset)
 ├── Directory(Container)
 ├── FSResourceTree(ResourceTree)

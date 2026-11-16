@@ -1,7 +1,7 @@
 import os
 import pytest
-from fsresource_tree import Directory, FSResourceTree, File, FilesystemProvider
-from fsresource_tree.operations import scan
+from fsresourcetree import Directory, FSResourceTree, File, FilesystemProvider
+from fsresourcetree.operations import scan
 
 def test_scan_materializes_nested_files_and_directories(tmp_path):
     physical = tmp_path / "root"

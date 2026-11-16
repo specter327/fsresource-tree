@@ -1,6 +1,6 @@
 import pytest
 
-from fsresource_tree import Directory, FSResourceTree, File, FilesystemProvider
+from fsresourcetree import Directory, FSResourceTree, File, FilesystemProvider
 
 
 def test_file_instance_methods_delegate_to_physical_operations(tmp_path):
