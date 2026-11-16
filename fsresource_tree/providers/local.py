@@ -715,9 +715,16 @@ class FilesystemProvider:
             info = source_path.lstat()
             if self._is_reparse_point(info) or not stat.S_ISREG(info.st_mode):
                 raise ValueError("only regular files can be copied")
-            with source_path.open("rb") as reader, destination_path.open("xb") as writer:
-                shutil.copyfileobj(reader, writer, length=1024 * 1024)
-            os.chmod(destination_path, stat.S_IMODE(info.st_mode))
+            try:
+                with source_path.open("rb") as reader, destination_path.open("xb") as writer:
+                    shutil.copyfileobj(reader, writer, length=1024 * 1024)
+                os.chmod(destination_path, stat.S_IMODE(info.st_mode))
+            except BaseException:
+                try:
+                    destination_path.unlink()
+                except FileNotFoundError:
+                    pass
+                raise
         return self._root / target_relative
 
     def profile(self, resource: Directory | File) -> PhysicalProfile:
