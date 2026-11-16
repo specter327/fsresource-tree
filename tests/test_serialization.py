@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from fsresource_tree import Directory, File, FSResourceTree
+from fsresourcetree import Directory, File, FSResourceTree
 
 
 def make_tree():
