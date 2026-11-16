@@ -123,7 +123,6 @@ backup = report.copy(root, new_name="backup")
 backup.delete()
 
 root.scan(recursive=True)
-root.purge()
 ```
 
 For a model built manually, configure the provider once at its root:
