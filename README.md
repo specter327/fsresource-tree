@@ -142,7 +142,7 @@ from resourcetree import Asset, Container, Resource, ResourceTree
 ## Installation
 
 ```bash
-pip install fsresourcetree
+pip install fsresource-tree
 ```
 
 Packages are published manually by the maintainer; this repository does not publish to PyPI automatically.
