@@ -131,6 +131,40 @@ with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
 
 Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, and `copy()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is deliberately explicit; resources do not silently retain a provider or filesystem-root binding. Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
 
+## Directory monitoring
+
+Monitoring is opt-in and uses a background polling thread. It compares physical metadata snapshots and dispatches `FilesystemChangeEvent` objects to listeners registered on a `Directory`. It does not read file contents.
+
+```python
+from fsresource_tree import Directory, FilesystemProvider, FilesystemChangeType
+
+root = Directory("workspace")
+
+def on_change(event):
+    if event.change_type is FilesystemChangeType.CREATED:
+        print("Created:", event.resource.path())
+    elif event.change_type is FilesystemChangeType.DELETED:
+        print("Deleted:", event.resource.path())
+    elif event.change_type is FilesystemChangeType.MODIFIED:
+        print("Metadata changed:", event.resource.path())
+
+root.add_listener(on_change)
+provider = FilesystemProvider("/srv/workspace", resource_root=root)
+try:
+    root.enable_monitor(provider=provider, interval=2.0, recursive=True)
+    # Keep the application running while monitoring is required.
+    # Call root.disable_monitor() before closing the provider.
+finally:
+    root.disable_monitor()
+    provider.close()
+```
+
+The API also exposes `remove_listener(callback)`, `monitor_enabled` and `disable_monitor()`. `enable_monitor()` is idempotent while a monitor is active. The provider must remain open for the entire monitoring lifetime. Callbacks execute on the monitor's background thread; they should return quickly and hand off lengthy work to the application. Exceptions raised by listeners are logged and do not terminate polling.
+
+The event types are `CREATED`, `DELETED` and `MODIFIED`. `MODIFIED` compares metadata (size, modification time, permissions, ownership and other available profile fields); access-time changes alone are ignored. External rename/move operations are not reliably correlated: they may appear as a deletion at the old path and creation at the new path. Changes that occur and revert between polling intervals can be missed. Same-size content changes that preserve observable metadata cannot be detected. Polling cost grows with the number of modeled resources and scan frequency; recursive monitoring should be reserved for small, relevant subtrees. The initial scan establishes a baseline and does not emit historical creation events.
+
+Monitoring reports point-in-time observations, not an atomic event journal. Polling errors are logged and polling continues; it does not guarantee delivery of every intermediate filesystem change. Native OS notification backends are not implemented.
+
 ## Generic core
 
 The underlying classes can be imported directly from `resourcetree`:
