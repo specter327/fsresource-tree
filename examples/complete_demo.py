@@ -20,7 +20,6 @@ from fsresourcetree import (
     Directory,
     FSResourceTree,
     File,
-    FilesystemProvider,
     resource_from_path,
     validate_path,
 )
@@ -114,7 +113,7 @@ def main() -> None:
         print(f"  indexed by UID: {tree.get(summary.uid) is summary}")
 
         print("\n[5/9] Inspect physical metadata (stat-style; no content access)")
-        with FilesystemProvider(physical_root, resource_root=root) as provider:
+        with root.filesystem_provider as provider:
             print(f"  provider capabilities: {provider.capabilities}")
             snapshot = profile(summary, provider=provider, update_cache=True)
             print(f"  cached profile: {summary.physical_profile is snapshot}")
@@ -129,7 +128,7 @@ def main() -> None:
             assert created_directory
             assert exists(generated_dir, provider=provider)
             assert exists(generated_file, provider=provider)
-            generated_profile = generated_file.profile(provider=provider)
+            generated_profile = generated_file.profile()
             print(f"  created directory: {provider.resolve(generated_dir)}")
             print(f"  created file:      {provider.resolve(generated_file)}")
             print(f"  generated profile: {generated_profile.to_dict()}")

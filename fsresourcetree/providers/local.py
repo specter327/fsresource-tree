@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..profile import PhysicalProfile
+from ..exceptions import UnsupportedPlatformError
 from .contract import ProviderCapabilities
 
 if TYPE_CHECKING:
@@ -35,8 +36,12 @@ class FilesystemProvider:
 
         if not isinstance(resource_root, Directory):
             raise TypeError("resource_root must be a Directory")
-        self._resource_root = resource_root
         self._platform = "termux" if os.environ.get("TERMUX_VERSION") else sys.platform
+        if self._platform not in {"linux", "termux", "win32"}:
+            raise UnsupportedPlatformError(
+                f"no filesystem provider is implemented for platform: {self._platform}"
+            )
+        self._resource_root = resource_root
         candidate = Path(root).expanduser()
         try:
             root_info = candidate.lstat()
@@ -74,6 +79,9 @@ class FilesystemProvider:
                 os.close(descriptor)
                 raise
             self._root_fd = descriptor
+        # Bind only after initialization succeeds; failed construction must not
+        # leave a partially initialized provider attached to the resource tree.
+        resource_root.bind_provider(self)
 
     @property
     def race_resistant(self) -> bool:
@@ -107,10 +115,12 @@ class FilesystemProvider:
         )
 
     def close(self) -> None:
-        """Release the provider's pinned root directory descriptor."""
+        """Release the provider's pinned root descriptor and unbind the root."""
         if self._root_fd is not None:
             os.close(self._root_fd)
             self._root_fd = None
+        if getattr(self._resource_root, "_filesystem_provider", None) is self:
+            del self._resource_root._filesystem_provider
 
     def __enter__(self) -> FilesystemProvider:
         if self._descriptor_mode and self._root_fd is None:

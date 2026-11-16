@@ -27,7 +27,7 @@ fsresourcetree
 
 The model and the real filesystem are separate sources of truth. A File or Directory may exist virtually without existing physically; a physical entry may exist without being materialized in the model. Properties such as `size`, timestamps, permissions and `exists` are physical observations that can change independently of the in-memory object.
 
-`File.profile(provider=...)` and `Directory.profile(provider=...)` query provider-backed metadata and return an immutable `PhysicalProfile` snapshot. The default call does not mutate the resource; pass `update_cache=True` to store the snapshot as `resource.physical_profile`. A missing entry is represented by `exists=False`; permission and I/O failures remain exceptions. Every snapshot records its UTC observation time. A cached observation is never a guarantee that the physical entry has not changed since it was queried.
+`File.profile()` and `Directory.profile()` query provider-backed metadata and return an immutable `PhysicalProfile` snapshot. The default call does not mutate the resource; pass `update_cache=True` to store the snapshot as `resource.physical_profile`. A missing entry is represented by `exists=False`; permission and I/O failures remain exceptions. Every snapshot records its UTC observation time. A cached observation is never a guarantee that the physical entry has not changed since it was queried.
 
 ## Scope and non-goals
 
@@ -108,28 +108,38 @@ Move and rename preserve the resource UID and update the in-memory parent/name a
 
 ### Resource instance methods
 
-The module-level operations remain available, but common physical operations are also exposed directly on each resource. This is a convenience facade: every method delegates to the same operations layer and still requires an explicit provider.
+Physical providers are bound once to a physical Directory root. Instance methods resolve the provider from the resource itself or its nearest ancestor; callers do not pass it to every operation. The simplest setup is to materialize an existing directory as a root:
+
+```python
+from fsresourcetree import File, resource_from_path
+
+root = resource_from_path("/srv/workspace")  # creates and binds its local provider
+report = File("report", extension="txt", parent=root)
+
+report.create()
+assert report.exists()
+report.rename("annual-report")
+backup = report.copy(root, new_name="backup")
+backup.delete()
+
+root.scan(recursive=True)
+root.close_provider()  # release the pinned root descriptor
+```
+
+For a model built manually, configure the provider once at its root:
 
 ```python
 from fsresourcetree import Directory, File, FilesystemProvider
 
 root = Directory("workspace")
+provider = FilesystemProvider("/srv/workspace", resource_root=root)
 report = File("report", extension="txt", parent=root)
-
-with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
-    report.create(provider=provider)
-    if report.exists(provider=provider):
-        report.rename("annual-report", provider=provider)
-
-    backup = report.copy(root, provider=provider, new_name="backup")
-    backup.delete(provider=provider)
-
-    # Directory-only operations:
-    scan_result = root.scan(provider=provider, recursive=True)
-    root.purge(provider=provider)
+report.create()
 ```
 
-Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, and `copy()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is deliberately explicit; resources do not silently retain a provider or filesystem-root binding. Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
+Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, `copy()`, and `profile()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is bound to the root, inherited by descendants, and unbound when the provider is closed; call `root.close_provider()` to release it. A resource without a configured provider raises `ProviderNotConfiguredError`; an unsupported runtime platform raises `UnsupportedPlatformError`. Neither condition is silently ignored. Module-level operation functions continue to accept an explicit provider for dependency injection.
+
+Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
 
 ## Generic core
 

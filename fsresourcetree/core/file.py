@@ -28,13 +28,7 @@ class File(FilesystemResourceOperations, Asset):
             raise TypeError("extension must be a string or None")
         if parent is not None and not isinstance(parent, Directory):
             raise TypeError("a File parent must be a Directory")
-        super().__init__(
-            name=name,
-            parent=parent,
-            uid=uid,
-            data=data,
-            metadata=metadata,
-        )
+        super().__init__(name=name, parent=parent, uid=uid, data=data, metadata=metadata)
         self.extension = extension
 
     def filename(self) -> str:
@@ -48,20 +42,16 @@ class File(FilesystemResourceOperations, Asset):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> File:
         from .model import _resource_from_validated_dict, validate_resource_payload
-
         validate_resource_payload(data, allowed_root_types=("file",))
         return _resource_from_validated_dict(data)
 
     @property
     def physical_profile(self):
-        """Latest explicitly cached physical metadata observation, if any."""
         return getattr(self, "_physical_profile", None)
 
-    def profile(self, *, provider, update_cache: bool = False):
-        """Query physical metadata through an explicit FilesystemProvider."""
+    def profile(self, *, update_cache: bool = False):
         from ..operations.profile import profile
-
-        return profile(self, provider=provider, update_cache=update_cache)
+        return profile(self, provider=self._require_provider(), update_cache=update_cache)
 
     def __repr__(self) -> str:
         return f"File(uid={self.uid!r}, name={self.filename()!r})"

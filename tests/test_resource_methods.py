@@ -11,21 +11,21 @@ def test_file_instance_methods_delegate_to_physical_operations(tmp_path):
     tree = FSResourceTree(roots=[root])
     provider = FilesystemProvider(physical, resource_root=root)
     try:
-        assert not item.exists(provider=provider)
-        assert item.create(provider=provider)
-        assert item.exists(provider=provider)
-        item.rename("annual-report", provider=provider)
+        assert not item.exists()
+        assert item.create()
+        assert item.exists()
+        item.rename("annual-report")
         assert item.name == "annual-report"
         assert (physical / "annual-report.txt").is_file()
 
-        duplicate = item.copy(root, provider=provider, new_name="backup")
+        duplicate = item.copy(root, new_name="backup")
         assert isinstance(duplicate, File)
         assert duplicate.uid != item.uid
-        assert duplicate.exists(provider=provider)
+        assert duplicate.exists()
         assert tree.get(duplicate.uid) is duplicate
 
-        assert duplicate.delete(provider=provider)
-        assert not duplicate.exists(provider=provider)
+        assert duplicate.delete()
+        assert not duplicate.exists()
         # Physical deletion does not silently detach or destroy the model object.
         assert duplicate.parent is root
         assert tree.get(duplicate.uid) is duplicate
@@ -42,18 +42,18 @@ def test_directory_instance_methods_create_scan_and_purge(tmp_path):
     tree = FSResourceTree(roots=[root])
     provider = FilesystemProvider(physical, resource_root=root)
     try:
-        assert workspace.create(provider=provider, recursive_children=True)
-        assert workspace.exists(provider=provider)
+        assert workspace.create(recursive_children=True)
+        assert workspace.exists()
         (physical / "workspace" / "external.txt").touch()
 
-        result = workspace.scan(provider=provider)
+        result = workspace.scan()
         assert result.count == 1
         external = workspace.find("external")
         assert isinstance(external, File)
         assert tree.get(external.uid) is external
 
-        assert workspace.purge(provider=provider)
-        assert not workspace.exists(provider=provider)
+        assert workspace.purge()
+        assert not workspace.exists()
         assert workspace.parent is root
     finally:
         provider.close()
@@ -72,7 +72,7 @@ def test_directory_move_method_updates_hierarchy_and_physical_location(tmp_path)
     provider = FilesystemProvider(physical, resource_root=root)
     try:
         uid = folder.uid
-        returned = folder.move(right, provider=provider, new_name="moved")
+        returned = folder.move(right, new_name="moved")
         assert returned is folder
         assert folder.uid == uid
         assert folder.parent is right

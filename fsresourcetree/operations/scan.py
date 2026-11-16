@@ -97,10 +97,9 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                         raise TypeError(f"model/physical type conflict at {entry.path!r}")
                     resource = existing
                 else:
-                    resource = resource_from_path(entry.path)
+                    resource = resource_from_path(entry.path, parent=current_model)
                     if not isinstance(resource, expected_type):
                         raise OSError(f"filesystem entry changed during scan: {entry.path}")
-                    current_model.append_child(resource)
                     discovered.append(resource)
                 if is_directory and recursive:
                     stack.append((resource, Path(entry.path)))
