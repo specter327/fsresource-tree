@@ -25,7 +25,7 @@ fi
 
 echo ""
 echo "================================="
-echo " Publishing fsresource-tree $VERSION "
+echo " Publishing fsresourcetree $VERSION "
 echo "================================="
 echo ""
 
@@ -124,5 +124,5 @@ python3 -m twine upload dist/*
 echo ""
 echo "================================="
 echo " DONE"
-echo " fsresource-tree $VERSION published"
+echo " fsresourcetree $VERSION published"
 echo "================================="
