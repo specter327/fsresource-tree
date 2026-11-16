@@ -1,5 +1,4 @@
 import os
-import time
 
 import pytest
 
@@ -129,3 +128,26 @@ def test_monitor_rejects_non_callable_listener(tmp_path):
     root = Directory("root")
     with pytest.raises(TypeError, match="callback"):
         root.add_listener(None)
+
+
+def test_monitor_dispatches_from_background_worker(tmp_path):
+    import threading
+
+    physical = tmp_path / "root"
+    physical.mkdir()
+    root = Directory("root")
+    provider = FilesystemProvider(physical, resource_root=root)
+    created = threading.Event()
+
+    def listener(event):
+        if event.change_type is FilesystemChangeType.CREATED:
+            created.set()
+
+    root.add_listener(listener)
+    try:
+        root.enable_monitor(provider=provider, interval=0.02)
+        (physical / "background.txt").touch()
+        assert created.wait(3), "background monitor did not dispatch the create event"
+    finally:
+        root.disable_monitor(timeout=3)
+        provider.close()
