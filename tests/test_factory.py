@@ -133,3 +133,40 @@ def test_resource_from_path_materializes_current_directory(path_factory, tmp_pat
 
     assert isinstance(resource, Directory)
     assert resource.name == tmp_path.name
+
+
+def test_materialized_root_binds_provider_and_descendants_use_it(tmp_path):
+    root = resource_from_path(tmp_path)
+    report = File("report", extension="txt", parent=root)
+
+    assert root.filesystem_provider is not None
+    assert report.filesystem_provider is root.filesystem_provider
+
+    assert report.create() is True
+    assert report.exists() is True
+    report.rename("annual-report")
+    assert (tmp_path / "annual-report.txt").exists()
+
+    duplicate = report.copy(root, new_name="backup")
+    assert duplicate.exists() is True
+    assert duplicate.delete() is True
+    assert report.delete() is True
+
+
+def test_unbound_virtual_resource_raises_explicit_provider_error():
+    from fsresourcetree import ProviderNotConfiguredError
+
+    with pytest.raises(ProviderNotConfiguredError, match="not associated"):
+        Directory("virtual").create()
+
+
+def test_provider_is_unbound_when_closed(tmp_path):
+    from fsresourcetree import FilesystemProvider, ProviderNotConfiguredError
+
+    root = Directory(tmp_path.name)
+    provider = FilesystemProvider(tmp_path, resource_root=root)
+    assert root.filesystem_provider is provider
+    provider.close()
+
+    with pytest.raises(ProviderNotConfiguredError):
+        root.exists()
