@@ -3,8 +3,8 @@
 `scan()` discovers filesystem descendants and materializes them as `Directory` and `File` resources. It is an explicit physical observation; ordinary model traversal and search remain in-memory operations.
 
 ```python
-from fsresource_tree import Directory, FilesystemProvider
-from fsresource_tree.operations import scan
+from fsresourcetree import Directory, FilesystemProvider
+from fsresourcetree.operations import scan
 
 root = Directory("workspace")
 with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
