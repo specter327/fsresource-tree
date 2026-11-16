@@ -11,6 +11,7 @@ from .exists import exists
 from .path import path
 from .profile import profile
 from .search import find
+from .scan import ScanResult, scan
 from .walker import walk
 
-__all__ = ["ancestors", "create", "delete", "exists", "find", "path", "profile", "walk"]
+__all__ = ["ancestors", "create", "delete", "exists", "find", "path", "profile", "scan", "ScanResult", "walk"]
