@@ -42,6 +42,21 @@ class FilesystemResourceOperations:
         from ..operations.access import executable
         return executable(self, provider=provider)
 
+    def is_readable(self, *, provider: FilesystemProviderProtocol) -> bool:
+        """Check read access for the provider's supported effective identity."""
+        from ..operations.access import readable
+        return readable(self, provider=provider)
+
+    def is_writable(self, *, provider: FilesystemProviderProtocol) -> bool:
+        """Check write access for the provider's supported effective identity."""
+        from ..operations.access import writable
+        return writable(self, provider=provider)
+
+    def is_executable(self, *, provider: FilesystemProviderProtocol) -> bool:
+        """Check execute/search access for the provider's supported effective identity."""
+        from ..operations.access import executable
+        return executable(self, provider=provider)
+
     def rename(self, new_name: str, *, provider: FilesystemProviderProtocol):
         from ..operations.relocate import rename
         return rename(self, new_name, provider=provider)
