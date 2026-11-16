@@ -82,7 +82,7 @@ def rename(
 
 def _clone(resource: Resource) -> Resource:
     if isinstance(resource, File):
-        return File(resource.name, extension=resource.extension, metadata=resource.metadata)
+        return File(resource.name, extension=resource.extension, metadata=resource.metadata, data=resource.data)
     clone = Directory(resource.name, metadata=resource.metadata)
     source_stack = [(resource, clone)]
     while source_stack:
@@ -90,7 +90,7 @@ def _clone(resource: Resource) -> Resource:
         for child in original.children:
             if isinstance(child, File):
                 duplicate.append_child(
-                    File(child.name, extension=child.extension, metadata=child.metadata)
+                    File(child.name, extension=child.extension, metadata=child.metadata, data=child.data)
                 )
             elif isinstance(child, Directory):
                 child_clone = Directory(child.name, metadata=child.metadata)
