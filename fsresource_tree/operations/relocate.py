@@ -154,16 +154,10 @@ def copy(
         return clone
     except BaseException:
         try:
-            if isinstance(clone, Directory):
-                purge = getattr(provider, "purge", None)
-                if callable(purge):
-                    purge(clone)
-                else:
-                    for node in walk(clone, inverse=True):
-                        if physical_exists(node):
-                            require_provider_operation(provider, "delete")(node)
-            elif physical_exists(clone):
-                require_provider_operation(provider, "delete")(clone)
+            physical_delete = require_provider_operation(provider, "delete")
+            for node in walk(clone, inverse=True):
+                if physical_exists(node):
+                    physical_delete(node)
         finally:
             destination.remove_child(clone)
         raise
