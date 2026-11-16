@@ -168,15 +168,18 @@ Decision helpers such as `is_readable()`, `is_writable()` and `is_executable()` 
 
 ## 8. Monitoring
 
-The initial monitoring strategy may use explicit polling for an individual resource:
+The initial implementation provides opt-in polling scoped to a `Directory`:
 
-- `enable_monitor(interval=...)`
-- `disable_monitor()`
-- `add_listener(callback)`
+- `directory.enable_monitor(provider=..., interval=..., recursive=True)`
+- `directory.disable_monitor()`
+- `directory.add_listener(callback)` / `directory.remove_listener(callback)`
+- `directory.monitor_enabled`
 
-Polling repeatedly queries metadata and compares observations before dispatching change events. It can consume substantial CPU, I/O and battery, especially at short intervals. It is intended only for a small number of critical resources, not whole trees or large resource collections.
+A background thread periodically scans the selected directory (recursively by default) and compares provider-backed metadata profiles for modeled resources. It emits immutable `FilesystemChangeEvent` instances with `CREATED`, `DELETED` or `MODIFIED` types. The initial scan establishes a baseline and emits no historical creation events. Listener callbacks execute on the monitor thread; listener exceptions are logged and isolated. Polling errors are logged and polling continues.
 
-Monitoring must be opt-in, stoppable, resource-scoped, and explicit about polling cost and missed/intermediate changes. Native OS notification backends may be added later behind provider capabilities; they must not be falsely represented as universally available.
+The monitor must be stopped before its provider is closed. Callbacks should return quickly. Metadata comparison ignores access-time-only changes. External rename/move operations are not reliably correlated and can appear as deletion plus creation. Changes that occur and revert between polls, and same-size content changes that preserve observable metadata, may be missed. Polling cost scales with the number of modeled resources and interval; recursive monitoring is intended for small relevant subtrees, not large trees or high-frequency whole-filesystem observation.
+
+This is a best-effort metadata observer, not an atomic event journal. Native OS notification backends are not implemented and must not be implied by the polling API.
 
 ## 9. Current implementation status
 
@@ -190,7 +193,8 @@ The following describes code that exists now, not the target architecture above.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
 - Implemented: public physical directory scanning via `operations.scan()` with recursive discovery, exclusions, additive reconciliation, no-follow entry classification and configurable error handling.
 - Implemented: public copy/move/rename operations. The local provider uses descriptor-relative POSIX move and opaque regular-file copy where available; directory copy is model-driven and creates destination directories exclusively. The Windows branch remains path-based. These operations are not atomic transactions against hostile concurrent filesystem mutation.
-- Not implemented yet: platform-specific provider classes and loader, effective-access helpers, monitoring/listeners and change events.
+- Implemented: opt-in directory-scoped metadata polling via `Directory.enable_monitor()`, stoppable background workers, listener registration/removal and immutable created/deleted/modified events. Monitoring uses the existing scan/profile operations, does not read file contents, and is best-effort rather than an atomic event journal.
+- Not implemented yet: platform-specific provider classes and loader, effective-access helpers and native OS notification backends.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
