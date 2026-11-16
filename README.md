@@ -133,7 +133,7 @@ Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `r
 
 ### Effective access queries
 
-`File` and `Directory` expose `readable()`, `writable()` and `executable()` methods. The equivalent module-level functions are exported from `fsresource_tree`:
+`File` and `Directory` expose `readable()`, `writable()` and `executable()` methods (also available as `is_readable()`, `is_writable()` and `is_executable()`). The equivalent module-level functions are exported from `fsresource_tree`:
 
 ```python
 if report.readable(provider=provider):
