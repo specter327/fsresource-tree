@@ -57,9 +57,11 @@ def _profile_state(profile: PhysicalProfile) -> tuple:
     )
 
 
-def _walk(directory: Directory) -> tuple[Directory | File, ...]:
-    resources: list[Directory | File] = []
-    stack = [directory]
+def _walk(directory: Directory, *, recursive: bool) -> tuple[Directory | File, ...]:
+    resources: list[Directory | File] = [directory]
+    if not recursive:
+        return (directory, *directory.children)
+    stack = list(reversed(directory.children))
     while stack:
         current = stack.pop()
         resources.append(current)
@@ -155,7 +157,7 @@ class PollingMonitor:
                 on_error="raise",
             )
         snapshot = {}
-        for resource in _walk(self.directory):
+        for resource in _walk(self.directory, recursive=self.recursive):
             observation = root_profile if resource is self.directory else self._profile(resource)
             snapshot[resource.uid] = (resource, observation)
         return snapshot
