@@ -106,6 +106,31 @@ duplicate = copy(report, backup_directory, provider=provider, new_name="report-b
 
 Move and rename preserve the resource UID and update the in-memory parent/name after the physical operation succeeds. Copy creates new resource identities. Directory copies reproduce the modeled subtree only; run `scan()` first if the model must reflect all physical descendants. Existing copy targets are refused rather than intentionally overwritten. File data is transferred internally by the provider; no bytes are returned and no file-content accessor is added. The local provider copies regular files and creates directories exclusively. Cross-volume moves are not converted into copy-and-delete operations. The current implementation does not promise an atomic transaction against hostile concurrent filesystem mutation; Windows remains path-based, and POSIX descriptor-relative operations still have the provider's documented concurrent-rename limitations.
 
+### Resource instance methods
+
+The module-level operations remain available, but common physical operations are also exposed directly on each resource. This is a convenience facade: every method delegates to the same operations layer and still requires an explicit provider.
+
+```python
+from fsresource_tree import Directory, File, FilesystemProvider
+
+root = Directory("workspace")
+report = File("report", extension="txt", parent=root)
+
+with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
+    report.create(provider=provider)
+    if report.exists(provider=provider):
+        report.rename("annual-report", provider=provider)
+
+    backup = report.copy(root, provider=provider, new_name="backup")
+    backup.delete(provider=provider)
+
+    # Directory-only operations:
+    scan_result = root.scan(provider=provider, recursive=True)
+    root.purge(provider=provider)
+```
+
+Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, and `copy()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is deliberately explicit; resources do not silently retain a provider or filesystem-root binding. Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
+
 ## Generic core
 
 The underlying classes can be imported directly from `resourcetree`:
