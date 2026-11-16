@@ -1,8 +1,8 @@
-# fsresource-tree
+# fsresourcetree
 
 **Filesystem specialization for [resourcetree](https://github.com/specter327/resourcetree).**
 
-`fsresource-tree` maps filesystem concepts to the generic resource model. It does not redefine the foundational hierarchy and is not limited to an in-memory-only filesystem model.
+`fsresourcetree` maps filesystem concepts to the generic resource model. It does not redefine the foundational hierarchy and is not limited to an in-memory-only filesystem model.
 
 ## Model layers
 
@@ -13,14 +13,14 @@ resourcetree
 │   └── Container
 └── ResourceTree
 
-fsresource-tree
+fsresourcetree
 ├── File(Asset)
 ├── Directory(Container)
 └── FSResourceTree(ResourceTree)
 ```
 
 - `resourcetree` owns identity, metadata, parent/children relationships, generic traversal, indexing, composition and generic dict/JSON/XML serialization.
-- `fsresource-tree` defines filesystem-specific `File`, `Directory` and `FSResourceTree` types, filesystem operations, and their specialized serialization.
+- `fsresourcetree` defines filesystem-specific `File`, `Directory` and `FSResourceTree` types, filesystem operations, and their specialized serialization.
 - The resource hierarchy represents filesystem entries and can be used to operate on the corresponding physical filesystem.
 
 ## Virtual and physical state
@@ -31,7 +31,7 @@ The model and the real filesystem are separate sources of truth. A File or Direc
 
 ## Scope and non-goals
 
-**`fsresource-tree` does not expose file-content reading or writing APIs.** Filesystem-level `copy()` remains in scope as an opaque provider operation: callers request a copy but never receive or manipulate the transferred bytes.
+**`fsresourcetree` does not expose file-content reading or writing APIs.** Filesystem-level `copy()` remains in scope as an opaque provider operation: callers request a copy but never receive or manipulate the transferred bytes.
 
 Filesystem manipulation is within the package's scope. Permitted operation categories include:
 
@@ -42,11 +42,11 @@ Filesystem manipulation is within the package's scope. Permitted operation categ
 - Listing directory contents and materializing filesystem entries as `File` and `Directory` resources.
 - Other filesystem-management operations that do not read or write file contents.
 
-This defines the package boundary; it does **not** claim that every permitted operation is already implemented. The public physical-operation API provides `create()`, `exists()`, `delete()`, `copy()`, `move()` and `rename()` (including modeled recursive deletion and explicit `purge()`). Logical `path()`, `walk()` and `find()` operate on the in-memory model. Path materialization is provided by `validate_path()` and `resource_from_path()`. Public recursive physical discovery is available through `operations.scan()` (also exported as `fsresource_tree.scan`). It is additive, reuses matching resources, supports exclusions and never follows links. Metadata profiling is available through `profile()`.
+This defines the package boundary; it does **not** claim that every permitted operation is already implemented. The public physical-operation API provides `create()`, `exists()`, `delete()`, `copy()`, `move()` and `rename()` (including modeled recursive deletion and explicit `purge()`). Logical `path()`, `walk()` and `find()` operate on the in-memory model. Path materialization is provided by `validate_path()` and `resource_from_path()`. Public recursive physical discovery is available through `operations.scan()` (also exported as `fsresourcetree.scan`). It is additive, reuses matching resources, supports exclusions and never follows links. Metadata profiling is available through `profile()`.
 
 The content boundary excludes APIs for reading, writing, appending, overwriting, streaming or hashing file contents. An opaque filesystem copy operation is a separate management operation explicitly permitted by the project: it transfers an entry without exposing its bytes to the caller or adding content-access methods to the resource model. Metadata profiling uses stat-style metadata only.
 
-The generic `Asset.data` field inherited by `File` is an in-memory model payload only. It is not connected to physical file contents. Applications that need physical content I/O must do so independently, using Python's standard `open()` function and its file objects / I/O wrappers (`IOWrapper`). Those workflows are outside the responsibility of `fsresource-tree`.
+The generic `Asset.data` field inherited by `File` is an in-memory model payload only. It is not connected to physical file contents. Applications that need physical content I/O must do so independently, using Python's standard `open()` function and its file objects / I/O wrappers (`IOWrapper`). Those workflows are outside the responsibility of `fsresourcetree`.
 
 ## Providers and supported platforms
 
@@ -69,7 +69,7 @@ Filesystem paths and names are accepted as input data, but the library's working
 When an existing path is supplied for materialization, validate its actual filesystem entry type before constructing the model. `validate_path()` returns the matching resource class and can enforce an expected type; `resource_from_path()` performs that validation and materializes the corresponding object:
 
 ```python
-from fsresource_tree import Directory, File, resource_from_path, validate_path
+from fsresourcetree import Directory, File, resource_from_path, validate_path
 
 root = resource_from_path("/srv/workspace")
 assert isinstance(root, Directory)
@@ -97,7 +97,7 @@ This distinction is intentional: paths are inputs to validation and filesystem o
 All three operations require an explicit provider and resource objects:
 
 ```python
-from fsresource_tree import copy, move, rename
+from fsresourcetree import copy, move, rename
 
 rename(report, "annual-report", provider=provider)
 move(report, archive_directory, provider=provider)
@@ -111,7 +111,7 @@ Move and rename preserve the resource UID and update the in-memory parent/name a
 The module-level operations remain available, but common physical operations are also exposed directly on each resource. This is a convenience facade: every method delegates to the same operations layer and still requires an explicit provider.
 
 ```python
-from fsresource_tree import Directory, File, FilesystemProvider
+from fsresourcetree import Directory, File, FilesystemProvider
 
 root = Directory("workspace")
 report = File("report", extension="txt", parent=root)
@@ -142,7 +142,7 @@ from resourcetree import Asset, Container, Resource, ResourceTree
 ## Installation
 
 ```bash
-pip install fsresource-tree
+pip install fsresourcetree
 ```
 
 Packages are published manually by the maintainer; this repository does not publish to PyPI automatically.
