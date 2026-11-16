@@ -72,7 +72,10 @@ def test_access_rejects_symbolic_links(tmp_path):
     physical = tmp_path / "root"
     physical.mkdir()
     (physical / "target").touch()
-    (physical / "link").symlink_to(physical / "target")
+    try:
+        (physical / "link").symlink_to(physical / "target")
+    except (NotImplementedError, OSError):
+        pytest.skip("symlink creation is unavailable on this platform")
     root = Directory("root")
     link = File("link", parent=root)
 
