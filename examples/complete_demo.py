@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""End-to-end, safe demonstration of the currently implemented fsresource-tree API.
+"""End-to-end, safe demonstration of the currently implemented fsresourcetree API.
 
 Run from the repository root after installing the development versions of
-resourcetree and fsresource-tree. All physical mutations are confined to a
+resourcetree and fsresourcetree. All physical mutations are confined to a
 TemporaryDirectory that is removed automatically when the program exits.
 
 This example's scan() function is demonstration code, not a public library API.
@@ -16,7 +16,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from fsresource_tree import (
+from fsresourcetree import (
     Directory,
     FSResourceTree,
     File,
@@ -24,7 +24,7 @@ from fsresource_tree import (
     resource_from_path,
     validate_path,
 )
-from fsresource_tree.operations import (
+from fsresourcetree.operations import (
     create,
     delete,
     exists,
@@ -33,7 +33,7 @@ from fsresource_tree.operations import (
     profile,
     walk,
 )
-from fsresource_tree.renderers import mermaid
+from fsresourcetree.renderers import mermaid
 
 
 def scan(directory: Directory, physical_path: Path) -> int:
@@ -71,9 +71,9 @@ def main() -> None:
     print("FSRESOURCE-TREE — COMPLETE IMPLEMENTED-FEATURE DEMONSTRATION")
     print("=" * 72)
 
-    # Fixture creation uses Python's standard library. fsresource-tree does
+    # Fixture creation uses Python's standard library. fsresourcetree does
     # not read or write file contents; it only models entries and metadata.
-    with tempfile.TemporaryDirectory(prefix="fsresource-tree-demo-") as temp:
+    with tempfile.TemporaryDirectory(prefix="fsresourcetree-demo-") as temp:
         physical_root = Path(temp)
         (physical_root / "documents").mkdir()
         (physical_root / "reports" / "annual").mkdir(parents=True)
