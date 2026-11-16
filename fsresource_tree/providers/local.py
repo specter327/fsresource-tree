@@ -621,7 +621,10 @@ class FilesystemProvider:
             source_parent_fd, source_name = self._open_parent_fd(old_relative)
             destination_parent_fd = None
             try:
-                destination_parent_fd = self._open_parent_fd(parent_relative) if parent_relative.parts else os.dup(self._root_fd)
+                if parent_relative.parts:
+                    destination_parent_fd, _ = self._open_parent_fd(parent_relative)
+                else:
+                    destination_parent_fd = os.dup(self._root_fd)
                 source_info = os.stat(source_name, dir_fd=source_parent_fd, follow_symlinks=False)
                 if self._is_reparse_point(source_info):
                     raise ValueError("symbolic links and reparse points cannot be moved")
@@ -667,7 +670,10 @@ class FilesystemProvider:
             source_fd = target_fd = None
             target_created = False
             try:
-                destination_parent_fd = self._open_parent_fd(destination_relative) if destination_relative.parts else os.dup(self._root_fd)
+                if destination_relative.parts:
+                    destination_parent_fd, _ = self._open_parent_fd(destination_relative)
+                else:
+                    destination_parent_fd = os.dup(self._root_fd)
                 source_fd = os.open(source_name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_parent_fd)
                 source_info = os.fstat(source_fd)
                 if not stat.S_ISREG(source_info.st_mode):
