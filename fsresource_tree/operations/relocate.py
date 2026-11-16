@@ -124,17 +124,24 @@ def copy(
     target_name = resource.name if new_name is None else _physical_name(resource, new_name)
     if any(child.name == target_name for child in destination.children):
         raise FileExistsError(target_name)
+    if isinstance(resource, Directory):
+        current = destination
+        while current is not None:
+            if current is resource:
+                raise ValueError("a directory cannot be copied into itself or one of its descendants")
+            current = current.parent
     physical_exists = require_provider_operation(provider, "exists")
     if not physical_exists(resource):
         raise FileNotFoundError(resource.path())
     physical_copy_file = require_provider_operation(provider, "copy_file")
     physical_create = require_provider_operation(provider, "create_exclusive")
+    originals = list(walk(resource))
     clone = _clone(resource)
     clone.name = target_name
+    created_nodes: list[Resource] = []
     destination.append_child(clone)
     try:
         nodes = list(walk(clone))
-        originals = list(walk(resource))
         if len(nodes) != len(originals):
             raise RuntimeError("internal copy model mismatch")
         source_by_position = iter(originals)
@@ -144,6 +151,7 @@ def copy(
                 if not physical_exists(original):
                     raise FileNotFoundError(original.path())
                 physical_create(node)
+                created_nodes.append(node)
             else:
                 if not physical_exists(original):
                     raise FileNotFoundError(original.path())
@@ -151,13 +159,13 @@ def copy(
                 if not isinstance(parent, Directory):
                     raise TypeError("copied File must have a Directory parent")
                 physical_copy_file(original, parent, node.name)
+                created_nodes.append(node)
         return clone
     except BaseException:
         try:
             physical_delete = require_provider_operation(provider, "delete")
-            for node in walk(clone, inverse=True):
-                if physical_exists(node):
-                    physical_delete(node)
+            for node in reversed(created_nodes):
+                physical_delete(node)
         finally:
             destination.remove_child(clone)
         raise
