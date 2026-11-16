@@ -252,6 +252,10 @@ class FilesystemProvider:
                 finally:
                     os.close(parent_fd)
             else:
+                # Validate every existing ancestor before path-based I/O.
+                # This rejects symlinks and Windows junctions/reparse points
+                # before mkdir can follow them outside the configured root.
+                self.resolve(resource)
                 target.mkdir(exist_ok=True)
                 if target.is_symlink() or not target.is_dir():
                     raise NotADirectoryError(target)
@@ -275,6 +279,9 @@ class FilesystemProvider:
                 finally:
                     os.close(parent_fd)
             else:
+                # resolve() lstat-checks each existing path component before
+                # opening or creating the leaf through path-based APIs.
+                self.resolve(resource)
                 if target.exists():
                     if target.is_symlink() or not target.is_file():
                         raise FileExistsError(target)
@@ -318,6 +325,9 @@ class FilesystemProvider:
             finally:
                 os.close(parent_fd)
 
+        # The path-based fallback must reject reparse points in every existing
+        # ancestor, not only at the leaf being removed.
+        self.resolve(resource)
         if not target.exists():
             return False
         if isinstance(resource, Directory):
@@ -474,6 +484,9 @@ class FilesystemProvider:
                     os.close(target_fd)
                 os.close(parent_fd)
 
+        self.resolve(directory)
+        # Do not let exists(), os.walk() or shutil.rmtree() traverse a junction
+        # or symlink in any component of the target path.
         self.resolve(directory)
         if not target.exists():
             return False
