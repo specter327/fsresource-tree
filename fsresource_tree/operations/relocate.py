@@ -128,7 +128,7 @@ def copy(
     if not physical_exists(resource):
         raise FileNotFoundError(resource.path())
     physical_copy_file = require_provider_operation(provider, "copy_file")
-    physical_create = require_provider_operation(provider, "create")
+    physical_create = require_provider_operation(provider, "create_exclusive")
     clone = _clone(resource)
     clone.name = target_name
     destination.append_child(clone)
