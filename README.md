@@ -123,6 +123,7 @@ backup = report.copy(root, new_name="backup")
 backup.delete()
 
 root.scan(recursive=True)
+root.close_provider()  # release the pinned root descriptor
 ```
 
 For a model built manually, configure the provider once at its root:
@@ -136,7 +137,7 @@ report = File("report", extension="txt", parent=root)
 report.create()
 ```
 
-Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, `copy()`, and `profile()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is bound to the root, inherited by descendants, and unbound when the provider is closed. A resource without a configured provider raises `ProviderNotConfiguredError`; an unsupported runtime platform raises `UnsupportedPlatformError`. Neither condition is silently ignored. Module-level operation functions continue to accept an explicit provider for dependency injection.
+Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, `copy()`, and `profile()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is bound to the root, inherited by descendants, and unbound when the provider is closed; call `root.close_provider()` to release it. A resource without a configured provider raises `ProviderNotConfiguredError`; an unsupported runtime platform raises `UnsupportedPlatformError`. Neither condition is silently ignored. Module-level operation functions continue to accept an explicit provider for dependency injection.
 
 Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
 
