@@ -84,7 +84,13 @@ def resource_from_path(
         raise TypeError("parent must be a Directory or None")
 
     if resource_type is Directory:
-        return Directory(name=candidate.name, parent=parent)
+        resource = Directory(name=candidate.name, parent=parent)
+        if parent is None:
+            # A top-level materialized Directory is a physical mount point.
+            # Its provider is retained by the root and inherited by descendants.
+            from .providers import FilesystemProvider
+            FilesystemProvider(candidate, resource_root=resource)
+        return resource
 
     suffix = candidate.suffix
     # pathlib treats a trailing dot as a suffix of ".". File.filename() cannot
