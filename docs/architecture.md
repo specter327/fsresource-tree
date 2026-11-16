@@ -51,7 +51,7 @@ Recursive modeled deletion preflights the physical directory contents before mod
 
 ## Security boundary and remaining hardening
 
-The local provider rejects traversal components and symbolic links and Windows reparse points in existing path components. These path-based checks are defense in depth, not a complete defense against a hostile process concurrently mutating the same directory. Race-resistant descriptor-relative operations and Windows reparse-point handling require platform-specific implementations and validation. Do not treat this provider as a hardened sandbox against concurrent hostile filesystem mutation.
+The provider rejects traversal components and symbolic links/reparse points in existing path components. On Windows, create, delete and purge remain path-based: every existing component is checked before I/O, but a hostile concurrent replacement after validation can still redirect an operation. On POSIX, descriptor-relative no-follow operations prevent symlink substitution but are not atomic against concurrent renames of already-opened directories. If an actor can rename a traversed descendant (for example, `root/a/b`) outside the configured root after it has been opened, subsequent create, delete or purge operations may act through that descriptor on the moved tree. The configured root, its ancestors, and all traversed parent/descendant directories must therefore be protected against hostile concurrent renames or mutations. Do not treat this provider as a hardened sandbox against concurrent hostile filesystem mutation.
 
 ## Serialization
 
