@@ -2,8 +2,8 @@ from pathlib import PurePath
 
 import pytest
 
-from fsresource_tree import Directory, File
-from fsresource_tree.operations import ancestors, find, path, walk
+from fsresourcetree import Directory, File
+from fsresourcetree.operations import ancestors, find, path, walk
 
 
 def test_walk_uses_depth_first_preorder_and_postorder():
