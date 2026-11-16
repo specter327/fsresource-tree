@@ -29,6 +29,25 @@ The model and the real filesystem are separate sources of truth. A File or Direc
 
 `File.profile(provider=...)` and `Directory.profile(provider=...)` query provider-backed metadata and return an immutable `PhysicalProfile` snapshot. The default call does not mutate the resource; pass `update_cache=True` to store the snapshot as `resource.physical_profile`. A missing entry is represented by `exists=False`; permission and I/O failures remain exceptions. Every snapshot records its UTC observation time. A cached observation is never a guarantee that the physical entry has not changed since it was queried.
 
+## Effective access checks
+
+```python
+from fsresource_tree import Directory, File, FilesystemProvider, readable, writable, executable
+
+root = Directory("workspace")
+report = File("report.txt", parent=root)
+
+with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
+    can_read = report.readable(provider=provider)
+    can_write = report.writable(provider=provider)
+    can_execute = report.executable(provider=provider)
+
+    # The same checks are available as module-level functions:
+    assert readable(report, provider=provider) == can_read
+```
+
+The methods are available on both `File` and `Directory`; `is_readable()`, `is_writable()` and `is_executable()` are equivalent aliases. For directories, execute access means search/traversal permission. The checks query the provider for the current process identity: POSIX uses effective UID/GID checks where exposed by Python; Windows follows the semantics of its native `os.access()` implementation and is not a general ACL evaluator. Arbitrary users/groups cannot be impersonated. A missing entry returns `False`; invalid types, unsafe links and other I/O failures remain errors. Results are point-in-time observations, not authorization guarantees for subsequent operations. They must not be used as a substitute for attempting an operation and handling its result.
+
 ## Scope and non-goals
 
 **`fsresource-tree` does not expose file-content reading or writing APIs.** Filesystem-level `copy()` remains in scope as an opaque provider operation: callers request a copy but never receive or manipulate the transferred bytes.
