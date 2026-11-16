@@ -105,10 +105,10 @@ def test_scan_requires_existing_physical_directory(tmp_path):
     physical = tmp_path / "root"
     physical.mkdir()
     root = Directory("root")
+    missing = Directory("missing", parent=root)
     provider = FilesystemProvider(physical, resource_root=root)
-    provider.delete(root)
     try:
         with pytest.raises(FileNotFoundError):
-            scan(root, provider=provider)
+            scan(missing, provider=provider)
     finally:
         provider.close()
