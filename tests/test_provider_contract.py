@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fsresource_tree import (
+from fsresourcetree import (
     Directory,
     File,
     FilesystemProvider,
@@ -10,7 +10,7 @@ from fsresource_tree import (
     ProviderCapabilities,
     UnsupportedOperationError,
 )
-from fsresource_tree.operations import create, delete, exists, profile
+from fsresourcetree.operations import create, delete, exists, profile
 
 
 class StructuralProvider:
