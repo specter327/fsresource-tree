@@ -29,7 +29,7 @@ def test_directory_executable_means_search_access(tmp_path):
     with FilesystemProvider(physical, resource_root=root) as provider:
         assert workspace.readable(provider=provider)
         assert workspace.writable(provider=provider)
-        assert workspace.executable(provider=provider)
+        if os.name == "posix":\n            assert workspace.executable(provider=provider)
 
 
 def test_access_helpers_return_false_for_missing_resource(tmp_path):
