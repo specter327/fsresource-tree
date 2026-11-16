@@ -125,3 +125,35 @@ def test_move_refuses_descendant_and_root(tmp_path):
             rename(root, "other", provider=provider)
     finally:
         provider.close()
+
+
+def test_copy_does_not_remove_preexisting_physical_directory_on_conflict(tmp_path):
+    physical = tmp_path / "root"
+    (physical / "source").mkdir(parents=True)
+    (physical / "destination" / "source").mkdir(parents=True)
+    (physical / "destination" / "source" / "keep.txt").write_text("keep")
+    root = Directory("root")
+    source = Directory("source", parent=root)
+    destination = Directory("destination", parent=root)
+    provider = FilesystemProvider(physical, resource_root=root)
+    try:
+        with pytest.raises(FileExistsError):
+            copy(source, destination, provider=provider)
+        assert (physical / "destination" / "source" / "keep.txt").read_text() == "keep"
+        assert destination.find("source") is None
+    finally:
+        provider.close()
+
+
+def test_copy_rejects_directory_into_its_descendant(tmp_path):
+    physical = tmp_path / "root"
+    (physical / "source" / "nested").mkdir(parents=True)
+    root = Directory("root")
+    source = Directory("source", parent=root)
+    nested = Directory("nested", parent=source)
+    provider = FilesystemProvider(physical, resource_root=root)
+    try:
+        with pytest.raises(ValueError, match="descendants"):
+            copy(source, nested, provider=provider)
+    finally:
+        provider.close()
