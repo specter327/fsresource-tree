@@ -20,7 +20,6 @@ from fsresourcetree import (
     Directory,
     FSResourceTree,
     File,
-    FilesystemProvider,
     resource_from_path,
     validate_path,
 )
