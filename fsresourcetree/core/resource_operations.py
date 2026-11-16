@@ -44,6 +44,13 @@ class FilesystemResourceOperations:
             current = current.parent
         return None
 
+    def close_provider(self) -> None:
+        """Close and unbind the provider associated with this resource."""
+        provider = self.filesystem_provider
+        if provider is None:
+            raise ProviderNotConfiguredError("resource has no configured filesystem provider")
+        provider.close()
+
     def _require_provider(self):
         provider = self.filesystem_provider
         if provider is None:
