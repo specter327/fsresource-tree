@@ -1,5 +1,5 @@
 [project]
-name = "fsresourcetree"
+name = "fsresource-tree"
 dynamic = ["version"]
 description = "Filesystem specialization for the generic resourcetree framework"
 readme = "README.md"
