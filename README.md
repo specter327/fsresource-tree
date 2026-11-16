@@ -131,6 +131,20 @@ with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
 
 Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `rename()`, `move()`, and `copy()`. `Directory` additionally exposes `scan()` and `purge()`. The provider is deliberately explicit; resources do not silently retain a provider or filesystem-root binding. Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
 
+### Effective access queries
+
+`File` and `Directory` expose `readable()`, `writable()` and `executable()` methods. The equivalent module-level functions are exported from `fsresource_tree`:
+
+```python
+if report.readable(provider=provider):
+    print("The current process can read this entry")
+
+if workspace.executable(provider=provider):
+    print("The current process can search/traverse this directory")
+```
+
+These are point-in-time observations made through the provider for the process identity. On POSIX, the local provider requests effective-UID/GID checks when the Python runtime supports them. Otherwise it uses the platform's available `os.access` behavior. In particular, Windows `os.access` is not a complete NTFS ACL evaluator. These helpers do not accept an arbitrary user identity, do not resolve every ACL/capability policy, and do not guarantee that a later operation will succeed: permissions and filesystem state can change between the check and the operation. A missing entry returns `False`; unsafe links and resource-type mismatches raise errors. For directories, executable means search/traversal permission.
+
 ## Generic core
 
 The underlying classes can be imported directly from `resourcetree`:
