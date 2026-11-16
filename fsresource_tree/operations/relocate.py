@@ -60,7 +60,13 @@ def move(
         resource.name = target_name
         resource.touch()
     else:
-        destination.append_child(resource)
+        if not old_parent.remove_child(resource):
+            raise RuntimeError("resource could not be detached after its physical move")
+        try:
+            destination.append_child(resource)
+        except BaseException:
+            old_parent.append_child(resource)
+            raise
         resource.name = target_name
         resource.touch()
     return resource
