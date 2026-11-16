@@ -25,6 +25,8 @@ def test_public_exports_are_importable():
         "FilesystemResourceType",
         "resource_from_path",
         "validate_path",
+        "scan",
+        "ScanResult",
         "operations",
         "renderers",
         "ResourceTreeError",

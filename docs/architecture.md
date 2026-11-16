@@ -188,7 +188,8 @@ The following describes code that exists now, not the target architecture above.
 - Public physical operations: `create()`, `exists()`, `delete()`; provider also implements modeled recursive deletion and explicit `purge()`.
 - In-memory operations: logical `path()`, `walk()`, `find()` and ancestor traversal.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
-- Not implemented yet: platform-specific provider classes and loader, public copy/move/rename, public physical directory listing/scan, effective-access helpers, monitoring/listeners and change events.
+- Implemented: public physical directory scanning via `operations.scan()` with recursive discovery, exclusions, additive reconciliation, no-follow entry classification and configurable error handling.
+- Not implemented yet: platform-specific provider classes and loader, public copy/move/rename, effective-access helpers, monitoring/listeners and change events.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
