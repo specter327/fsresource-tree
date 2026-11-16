@@ -1,14 +1,14 @@
 from importlib import import_module, metadata
 
-import fsresource_tree as fs
+import fsresourcetree as fs
 
 
 def test_distribution_version_matches_package_version():
-    assert metadata.version("fsresource-tree") == fs.__version__
+    assert metadata.version("fsresourcetree") == fs.__version__
 
 
 def test_distribution_declares_the_supported_core_dependency():
-    requirements = metadata.requires("fsresource-tree") or []
+    requirements = metadata.requires("fsresourcetree") or []
     assert "resourcetree>=0.5.0" in requirements
 
 
@@ -46,13 +46,13 @@ def test_public_exports_are_importable():
 
 def test_runtime_subpackages_are_importable():
     for module in (
-        "fsresource_tree.core",
-        "fsresource_tree.operations",
-        "fsresource_tree.providers",
-        "fsresource_tree.providers.contract",
-        "fsresource_tree.profile",
-        "fsresource_tree.factory",
-        "fsresource_tree.renderers",
+        "fsresourcetree.core",
+        "fsresourcetree.operations",
+        "fsresourcetree.providers",
+        "fsresourcetree.providers.contract",
+        "fsresourcetree.profile",
+        "fsresourcetree.factory",
+        "fsresourcetree.renderers",
     ):
         assert import_module(module) is not None
 
