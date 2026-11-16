@@ -644,6 +644,7 @@ class FilesystemProvider:
             source_parent_fd, source_name = self._open_parent_fd(source_relative)
             destination_parent_fd = None
             source_fd = target_fd = None
+            target_created = False
             try:
                 destination_parent_fd = self._open_parent_fd(destination_relative) if destination_relative.parts else os.dup(self._root_fd)
                 source_fd = os.open(source_name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_parent_fd)
@@ -656,6 +657,7 @@ class FilesystemProvider:
                     stat.S_IMODE(source_info.st_mode),
                     dir_fd=destination_parent_fd,
                 )
+                target_created = True
                 while True:
                     chunk = os.read(source_fd, 1024 * 1024)
                     if not chunk:
@@ -668,10 +670,11 @@ class FilesystemProvider:
                 if target_fd is not None:
                     os.close(target_fd)
                     target_fd = None
-                try:
-                    os.unlink(target_component, dir_fd=destination_parent_fd)
-                except (FileNotFoundError, TypeError):
-                    pass
+                if target_created and destination_parent_fd is not None:
+                    try:
+                        os.unlink(target_component, dir_fd=destination_parent_fd)
+                    except FileNotFoundError:
+                        pass
                 raise
             finally:
                 if target_fd is not None:
