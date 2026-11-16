@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from fsresource_tree import Directory, File, resource_from_path
-from fsresource_tree.providers import FilesystemProvider
-from fsresource_tree.operations import create, delete, exists, path, walk
+from fsresourcetree import Directory, File, resource_from_path
+from fsresourcetree.providers import FilesystemProvider
+from fsresourcetree.operations import create, delete, exists, path, walk
 
 
 def test_provider_maps_logical_root_to_existing_directory(tmp_path):
