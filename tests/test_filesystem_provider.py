@@ -264,3 +264,39 @@ def test_posix_create_blocks_symlink_inserted_after_parent_resolution(tmp_path, 
         assert outside.read_text() == "protected"
     finally:
         provider.close()
+
+
+
+@pytest.mark.parametrize("operation", ["create", "delete", "purge"])
+def test_path_based_operations_reject_symlinked_ancestors(tmp_path, monkeypatch, operation):
+    root = tmp_path / "sandbox"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    protected = outside / "secret"
+    protected.write_text("protected")
+    model = Directory("root")
+    linked = Directory("linked", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+
+    # Exercise the Windows-style path-based fallback on every CI platform.
+    monkeypatch.setattr(provider, "_descriptor_mode", False)
+    (root / "linked").symlink_to(outside, target_is_directory=True)
+
+    try:
+        if operation == "create":
+            resource = File("created", parent=linked)
+            with pytest.raises(ValueError, match="symbolic links and reparse points"):
+                provider.create(resource)
+            assert not (outside / "created").exists()
+        elif operation == "delete":
+            resource = File("secret", parent=linked)
+            with pytest.raises(ValueError, match="symbolic links and reparse points"):
+                provider.delete(resource)
+            assert protected.read_text() == "protected"
+        else:
+            with pytest.raises(ValueError, match="symbolic links and reparse points"):
+                provider.purge(linked)
+            assert protected.read_text() == "protected"
+    finally:
+        provider.close()
