@@ -30,6 +30,18 @@ class FilesystemResourceOperations:
         from ..operations.exists import exists
         return exists(self, provider=provider)
 
+    def readable(self, *, provider: FilesystemResourceOperationsProvider) -> bool:
+        from ..operations.access import readable
+        return readable(self, provider=provider)
+
+    def writable(self, *, provider: FilesystemResourceOperationsProvider) -> bool:
+        from ..operations.access import writable
+        return writable(self, provider=provider)
+
+    def executable(self, *, provider: FilesystemResourceOperationsProvider) -> bool:
+        from ..operations.access import executable
+        return executable(self, provider=provider)
+
     def rename(self, new_name: str, *, provider: FilesystemProviderProtocol):
         from ..operations.relocate import rename
         return rename(self, new_name, provider=provider)
