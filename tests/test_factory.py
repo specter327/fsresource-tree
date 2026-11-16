@@ -151,6 +151,7 @@ def test_materialized_root_binds_provider_and_descendants_use_it(tmp_path):
     assert duplicate.exists() is True
     assert duplicate.delete() is True
     assert report.delete() is True
+    root.close_provider()
 
 
 def test_unbound_virtual_resource_raises_explicit_provider_error():
@@ -166,7 +167,7 @@ def test_provider_is_unbound_when_closed(tmp_path):
     root = Directory(tmp_path.name)
     provider = FilesystemProvider(tmp_path, resource_root=root)
     assert root.filesystem_provider is provider
-    provider.close()
+    root.close_provider()
 
     with pytest.raises(ProviderNotConfiguredError):
         root.exists()
