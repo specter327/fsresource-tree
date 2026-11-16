@@ -63,6 +63,7 @@ def test_directory_move_method_updates_hierarchy_and_physical_location(tmp_path)
     physical = tmp_path / "root"
     (physical / "left").mkdir(parents=True)
     (physical / "right").mkdir()
+    (physical / "left" / "folder").mkdir()
     root = Directory("root")
     left = Directory("left", parent=root)
     right = Directory("right", parent=root)
