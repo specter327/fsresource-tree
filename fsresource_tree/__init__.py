@@ -1,7 +1,7 @@
 """Filesystem specialization built on top of the generic resourcetree core."""
 
 from . import operations, renderers
-from .operations import ScanResult, copy, move, rename, scan
+from .operations import (\n    FilesystemChangeEvent, FilesystemChangeType, PollingMonitor, ScanResult,\n    copy, move, rename, scan,\n)
 from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
@@ -36,7 +36,7 @@ __all__ = [
     "copy",
     "move",
     "rename",
-    "ScanResult",
+    "ScanResult",\n    "FilesystemChangeEvent",\n    "FilesystemChangeType",\n    "PollingMonitor",
     "renderers",
     "ResourceTreeError",
     "ResourceNotFoundError",
