@@ -141,6 +141,22 @@ class FilesystemProvider:
             raise RuntimeError("provider descriptor is closed or unavailable")
         return self._open_parent_at(self._root_fd, tuple(relative.parts))
 
+    def _open_directory_fd(self, relative: Path) -> int:
+        """Open a directory beneath the pinned root and return its descriptor."""
+        if self._root_fd is None:
+            raise RuntimeError("provider descriptor is closed or unavailable")
+        if not relative.parts:
+            return os.dup(self._root_fd)
+        parent_fd, name = self._open_parent_fd(relative)
+        try:
+            return os.open(
+                name,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                dir_fd=parent_fd,
+            )
+        finally:
+            os.close(parent_fd)
+
     def _stat_relative(self, relative: Path) -> os.stat_result:
         if self._root_fd is None:
             raise RuntimeError("provider descriptor is closed or unavailable")
@@ -621,10 +637,7 @@ class FilesystemProvider:
             source_parent_fd, source_name = self._open_parent_fd(old_relative)
             destination_parent_fd = None
             try:
-                if parent_relative.parts:
-                    destination_parent_fd, _ = self._open_parent_fd(parent_relative)
-                else:
-                    destination_parent_fd = os.dup(self._root_fd)
+                destination_parent_fd = self._open_directory_fd(parent_relative)
                 source_info = os.stat(source_name, dir_fd=source_parent_fd, follow_symlinks=False)
                 if self._is_reparse_point(source_info):
                     raise ValueError("symbolic links and reparse points cannot be moved")
@@ -670,10 +683,7 @@ class FilesystemProvider:
             source_fd = target_fd = None
             target_created = False
             try:
-                if destination_relative.parts:
-                    destination_parent_fd, _ = self._open_parent_fd(destination_relative)
-                else:
-                    destination_parent_fd = os.dup(self._root_fd)
+                destination_parent_fd = self._open_directory_fd(destination_relative)
                 source_fd = os.open(source_name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_parent_fd)
                 source_info = os.fstat(source_fd)
                 if not stat.S_ISREG(source_info.st_mode):
