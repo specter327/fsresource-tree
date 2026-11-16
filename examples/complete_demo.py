@@ -128,7 +128,7 @@ def main() -> None:
             assert created_directory
             assert exists(generated_dir, provider=provider)
             assert exists(generated_file, provider=provider)
-            generated_profile = generated_file.profile(provider=provider)
+            generated_profile = generated_file.profile()
             print(f"  created directory: {provider.resolve(generated_dir)}")
             print(f"  created file:      {provider.resolve(generated_file)}")
             print(f"  generated profile: {generated_profile.to_dict()}")
