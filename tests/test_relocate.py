@@ -57,13 +57,15 @@ def test_copy_file_creates_new_identity_and_preserves_source(tmp_path):
     root = Directory("root")
     source_dir = Directory("source", parent=root)
     destination = Directory("destination", parent=root)
-    source = File("data", extension="bin", parent=source_dir)
+    source = File("data", extension="bin", parent=source_dir, data={"model": "payload"})
     tree = FSResourceTree(roots=[root])
     provider = FilesystemProvider(physical, resource_root=root)
     try:
         duplicate = copy(source, destination, provider=provider, new_name="copy")
         assert isinstance(duplicate, File)
         assert duplicate.uid != source.uid
+        assert duplicate.data == source.data
+        assert duplicate.data is source.data
         assert duplicate.parent is destination
         assert (physical / "source" / "data.bin").read_bytes() == b"payload"
         assert (physical / "destination" / "copy.bin").read_bytes() == b"payload"
