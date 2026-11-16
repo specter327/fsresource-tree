@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - security/confined-filesystem-provider
   workflow_dispatch:
 
 jobs:
@@ -34,13 +35,29 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies and package
         working-directory: fsresource-tree
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest
+          python -m pip install build pytest
           python -m pip install ../resourcetree
-          python -m pip install --no-deps -e .
+          python -m pip install --no-deps .
+
+      - name: Build generic core wheel
+        working-directory: resourcetree
+        run: |
+          python -m pip install build
+          python -m build --wheel
+      - name: Build filesystem source and wheel distributions
+        working-directory: fsresource-tree
+        run: python -m build --sdist --wheel
+      - name: Install and verify each filesystem distribution in isolation
+        working-directory: fsresource-tree
+        run: python scripts/verify_distribution.py --core-wheel ../resourcetree/dist/resourcetree-0.5.0-py3-none-any.whl --version 0.4.0
+
+      - name: Install the built wheel
+        working-directory: fsresource-tree
+        run: python -c "import glob, subprocess, sys; wheels = glob.glob('dist/*.whl'); assert len(wheels) == 1, wheels; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-deps', '--force-reinstall', wheels[0]])"
 
       - name: Run tests
         working-directory: fsresource-tree

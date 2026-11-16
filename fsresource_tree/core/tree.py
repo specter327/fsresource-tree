@@ -1,4 +1,4 @@
-"""Filesystem specialization of the generic ResourceTree."""
+""""Filesystem specialization of the generic ResourceTree."""
 
 from __future__ import annotations
 
@@ -26,23 +26,17 @@ class FSResourceTree(ResourceTree):
     ) -> None:
         super().__init__(roots=roots, name=name, uid=uid)
 
+    def _validate_node(self, resource) -> None:
+        if not isinstance(resource, (Directory, File)):
+            raise TypeError(
+                "filesystem trees can contain only Directory or File resources"
+            )
+
     def add_roots(self, resources: Iterable[Directory]) -> tuple[Directory, ...]:
         candidates = list(resources)
-        seen: set[int] = set()
         for root in candidates:
             if not isinstance(root, Directory):
                 raise TypeError("filesystem tree roots must be Directory instances")
-            stack = [root]
-            while stack:
-                node = stack.pop()
-                identity = id(node)
-                if identity in seen:
-                    raise ValueError("duplicate reference or cycle in filesystem hierarchy")
-                seen.add(identity)
-                if not isinstance(node, (Directory, File)):
-                    raise TypeError("filesystem trees can contain only Directory or File resources")
-                if isinstance(node, Directory):
-                    stack.extend(node.children)
         return super().add_roots(candidates)
 
     def register(self, resource, parent: Directory | None = None) -> str:
@@ -61,13 +55,10 @@ class FSResourceTree(ResourceTree):
 
     @classmethod
     def from_dict(cls, data: dict) -> FSResourceTree:
-        if not isinstance(data, dict):
-            raise TypeError("tree data must be a dictionary")
-        if data.get("type") != cls.TYPE:
-            raise ValueError(f"expected resource type {cls.TYPE!r}")
+        from .model import _resource_from_validated_dict, validate_tree_payload
 
-        from .model import resource_from_dict
-        roots = [resource_from_dict(item) for item in data.get("roots", [])]
+        validate_tree_payload(data, cls.TYPE)
+        roots = [_resource_from_validated_dict(item) for item in data["roots"]]
         return cls(name=data["name"], uid=data["uid"], roots=roots)
 
 

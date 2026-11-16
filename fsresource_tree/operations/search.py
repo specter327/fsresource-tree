@@ -1,20 +1,19 @@
-"""Búsqueda dentro de estructuras de recursos."""
+"""Exact-name lookup within filesystem resource subtrees."""
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 from ..core.directory import Directory
 from ..core.file import File
-from ..operations.walker import walk
+from .walker import walk
 
 
-def find(
-    resource: Union[Directory, File], target: str
-) -> Optional[Union[Directory, File]]:
-    """Busca, dentro de la estructura de `resource`, el primer nodo cuyo
-    `name` sea igual a `target` (recorrido top-down). Devuelve None si no
-    se encuentra ninguna coincidencia."""
+def find(resource: Directory | File, target: str) -> Directory | File | None:
+    """Return the first top-down exact name match, or None."""
+    if not isinstance(resource, (Directory, File)):
+        raise TypeError("resource must be a Directory or File")
+    if not isinstance(target, str):
+        raise TypeError("target must be a string")
+
     for node in walk(resource):
         if node.name == target:
             return node

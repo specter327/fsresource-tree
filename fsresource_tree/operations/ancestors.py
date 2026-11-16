@@ -1,86 +1,61 @@
-"""
-Recorrido de ancestros dentro de una estructura de recursos.
-
-Obtiene la cadena de padres desde un recurso hasta la raíz.
-"""
+"""Ancestor traversal for filesystem resource hierarchies."""
 
 from __future__ import annotations
 
-from typing import Iterator, Union
+from collections.abc import Iterator
 
 from ..core.directory import Directory
 from ..core.file import File
 
 
-# Type definition
-ResourceType = Union[Directory, File]
+Resource = Directory | File
 
 
-# Function definition
 def ancestors(
-    resource: ResourceType,
+    resource: Resource,
     include_self: bool = True,
-    inverse: bool = False
-) -> Iterator[ResourceType]:
+    inverse: bool = False,
+) -> Iterator[Resource]:
+    """Yield the parent chain in root-to-resource order by default.
+
+    Set include_self=False to start at the parent. Set inverse=True to yield
+    from the resource toward its root.
     """
-    Recorre los padres de un recurso hasta la raíz.
+    if not isinstance(resource, (Directory, File)):
+        raise TypeError("resource must be a Directory or File")
+    if not isinstance(include_self, bool):
+        raise TypeError("include_self must be a bool")
+    if not isinstance(inverse, bool):
+        raise TypeError("inverse must be a bool")
 
-    Args:
-        resource:
-            Recurso inicial.
+    if not include_self and resource.parent is not None:
+        if not isinstance(resource.parent, Directory):
+            raise TypeError("filesystem resource parents must be Directory instances")
+        if sum(child is resource for child in resource.parent.children) != 1:
+            raise ValueError("inconsistent parent/child relationship")
 
-        include_self:
-            Si es True, incluye el recurso inicial.
-            Si es False, comienza desde el padre.
-
-        inverse:
-            False:
-                raíz -> recurso
-
-            True:
-                recurso -> raíz
-
-
-    Examples:
-
-        root
-        └── home
-            └── user
-                └── file
-
-
-        ancestors(file)
-
-        root
-        home
-        user
-        file
-
-
-        ancestors(file, inverse=True)
-
-        file
-        user
-        home
-        root
-
-    """
-
-    chain = []
-
-    current = resource
-
-    if not include_self:
-        current = getattr(current, "parent", None)
+    chain: list[Resource] = []
+    current = resource if include_self else resource.parent
+    visited: set[int] = set()
 
     while current is not None:
+        if not isinstance(current, (Directory, File)):
+            raise TypeError("filesystem ancestors must be Directory or File resources")
+        identity = id(current)
+        if identity in visited:
+            raise ValueError("cycle detected in filesystem parent chain")
+        visited.add(identity)
         chain.append(current)
-        current = getattr(current, "parent", None)
 
+        parent = current.parent
+        if parent is not None:
+            if not isinstance(parent, Directory):
+                raise TypeError("filesystem resource parents must be Directory instances")
+            if sum(child is current for child in parent.children) != 1:
+                raise ValueError("inconsistent parent/child relationship")
+        current = parent
 
     if inverse:
-        for item in chain:
-            yield item
+        yield from chain
     else:
-        for item in reversed(chain):
-            yield item
+        yield from reversed(chain)

@@ -1,15 +1,15 @@
-"""Operaciones sobre estructuras de recursos: walk, path, find.
+"""Operations over filesystem resource models.
 
-Estas funciones operan directamente sobre el grafo en memoria (via
-parent/children) y no requieren una instancia de ResourceTree.
+Traversal and logical path calculation are in-memory operations. Physical
+operations require an explicit FilesystemProvider.
 """
 
-from ..operations.path import path
-from ..operations.search import find
-from ..operations.walker import walk
-from ..operations.exists import exists
-from ..operations.create import create
-from ..operations.ancestors import ancestors
-from ..operations.delete import delete
+from .ancestors import ancestors
+from .create import create
+from .delete import delete
+from .exists import exists
+from .path import path
+from .search import find
+from .walker import walk
 
-__all__ = ["walk", "path", "find", "exists", "create", "ancestors", "delete"]
+__all__ = ["ancestors", "create", "delete", "exists", "find", "path", "walk"]
