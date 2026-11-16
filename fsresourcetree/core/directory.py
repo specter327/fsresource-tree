@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..providers import FilesystemProviderProtocol
+from typing import Any
 
 from .resource_operations import FilesystemResourceOperations
-
 from resourcetree import Container
 
 
@@ -30,7 +26,6 @@ class Directory(FilesystemResourceOperations, Container):
 
     def _validate_attachment(self, resource) -> None:
         from .file import File
-
         if not isinstance(resource, (Directory, File)):
             raise TypeError("a Directory can contain only Directory or File resources")
         super()._validate_attachment(resource)
@@ -38,51 +33,38 @@ class Directory(FilesystemResourceOperations, Container):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Directory:
         from .model import _resource_from_validated_dict, validate_resource_payload
-
         validate_resource_payload(data, allowed_root_types=("directory",))
         return _resource_from_validated_dict(data)
 
     @property
     def physical_profile(self):
-        """Latest explicitly cached physical metadata observation, if any."""
         return getattr(self, "_physical_profile", None)
 
-    def profile(self, *, provider, update_cache: bool = False):
-        """Query physical metadata through an explicit FilesystemProvider."""
+    def profile(self, *, update_cache: bool = False):
         from ..operations.profile import profile
-
-        return profile(self, provider=provider, update_cache=update_cache)
-
+        return profile(self, provider=self._require_provider(), update_cache=update_cache)
 
     def scan(
         self,
         *,
-        provider: FilesystemProviderProtocol,
         recursive: bool = True,
         excluded_names: set[str] | frozenset[str] = frozenset(),
         exclude=None,
         on_error: str = "raise",
     ):
-        """Discover physical descendants and materialize them under this directory."""
         from ..operations.scan import scan
-
         return scan(
             self,
-            provider=provider,
+            provider=self._require_provider(),
             recursive=recursive,
             excluded_names=excluded_names,
             exclude=exclude,
             on_error=on_error,
         )
 
-    def purge(self, *, provider: FilesystemProviderProtocol) -> bool:
-        """Remove this physical directory and all its descendants."""
+    def purge(self) -> bool:
         from ..operations.delete import delete
-
-        return delete(self, provider=provider, purge=True)
+        return delete(self, provider=self._require_provider(), purge=True)
 
     def __repr__(self) -> str:
-        return (
-            f"Directory(uid={self.uid!r}, name={self.name!r}, "
-            f"children={len(self.children)})"
-        )
+        return f"Directory(uid={self.uid!r}, name={self.name!r}, children={len(self.children)})"
