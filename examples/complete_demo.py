@@ -114,7 +114,7 @@ def main() -> None:
         print(f"  indexed by UID: {tree.get(summary.uid) is summary}")
 
         print("\n[5/9] Inspect physical metadata (stat-style; no content access)")
-        with FilesystemProvider(physical_root, resource_root=root) as provider:
+        with root.filesystem_provider as provider:
             print(f"  provider capabilities: {provider.capabilities}")
             snapshot = profile(summary, provider=provider, update_cache=True)
             print(f"  cached profile: {summary.physical_profile is snapshot}")
