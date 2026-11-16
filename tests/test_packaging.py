@@ -27,6 +27,9 @@ def test_public_exports_are_importable():
         "validate_path",
         "scan",
         "ScanResult",
+        "FilesystemChangeEvent",
+        "FilesystemChangeType",
+        "PollingMonitor",
         "copy",
         "move",
         "rename",
@@ -48,6 +51,7 @@ def test_runtime_subpackages_are_importable():
     for module in (
         "fsresource_tree.core",
         "fsresource_tree.operations",
+        "fsresource_tree.operations.monitor",
         "fsresource_tree.providers",
         "fsresource_tree.providers.contract",
         "fsresource_tree.profile",
