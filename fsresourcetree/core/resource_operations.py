@@ -21,10 +21,9 @@ class FilesystemResourceOperations:
     def bind_provider(self, provider: FilesystemProviderProtocol):
         """Bind a provider to this Directory root and return the resource."""
         from ..providers import FilesystemProviderProtocol
+        from .directory import Directory
 
-        if not isinstance(self, __import__(
-            "fsresourcetree.core.directory", fromlist=["Directory"]
-        ).Directory):
+        if not isinstance(self, Directory):
             raise TypeError("a filesystem provider can only be bound to a Directory")
         if not isinstance(provider, FilesystemProviderProtocol):
             raise TypeError("provider must implement FilesystemProviderProtocol")
