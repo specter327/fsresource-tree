@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from .resource_operations import FilesystemResourceOperations
+
 from resourcetree import Container
 
 
-class Directory(Container):
+class Directory(FilesystemResourceOperations, Container):
     """A filesystem directory modeled as a generic Container."""
 
     TYPE = "directory"
