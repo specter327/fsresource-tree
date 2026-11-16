@@ -48,26 +48,4 @@ class FilesystemResourceOperations:
         from ..operations.relocate import copy
         return copy(self, destination, provider=provider, new_name=new_name)
 
-    def scan(
-        self, *, provider: FilesystemProviderProtocol, recursive: bool = True,
-        excluded_names: set[str] | frozenset[str] = frozenset(),
-        exclude=None, on_error: str = "raise"
-    ):
-        from ..core.directory import Directory
-        from ..operations.scan import scan
-        if not isinstance(self, Directory):
-            raise TypeError("scan is available only on Directory resources")
-        return scan(
-            self, provider=provider, recursive=recursive,
-            excluded_names=excluded_names, exclude=exclude, on_error=on_error
-        )
-
-    def purge(self, *, provider: FilesystemProviderProtocol) -> bool:
-        from ..core.directory import Directory
-        from ..operations.delete import delete
-        if not isinstance(self, Directory):
-            raise TypeError("purge is available only on Directory resources")
-        return delete(self, provider=provider, purge=True)
-
-
 __all__ = ["FilesystemResourceOperations"]
