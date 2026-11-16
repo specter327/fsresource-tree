@@ -102,7 +102,7 @@ class FilesystemProvider:
             platform=self._platform,
             filesystem=None,
             race_resistant=self.race_resistant,
-            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "move", "copy_file", "create_exclusive"}),
+            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "access", "move", "copy_file", "create_exclusive"}),
             metadata_fields=frozenset(metadata_fields),
         )
 
