@@ -1,6 +1,7 @@
 """Filesystem specialization built on top of the generic resourcetree core."""
 
 from . import operations, renderers
+from .operations import ScanResult, scan
 from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
@@ -31,6 +32,8 @@ __all__ = [
     "resource_from_path",
     "validate_path",
     "operations",
+    "scan",
+    "ScanResult",
     "renderers",
     "ResourceTreeError",
     "ResourceNotFoundError",
