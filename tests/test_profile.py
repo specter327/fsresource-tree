@@ -15,7 +15,7 @@ def test_file_profile_returns_metadata_without_mutating_resource(tmp_path):
     resource = File("report", extension="txt", parent=model)
     provider = FilesystemProvider(root, resource_root=model)
 
-    observation = resource.profile(provider=provider)
+    observation = resource.profile()
 
     assert isinstance(observation, PhysicalProfile)
     assert observation.exists is True
@@ -34,7 +34,7 @@ def test_profile_cache_update_is_explicit(tmp_path):
     resource = File("report", parent=model)
     provider = FilesystemProvider(root, resource_root=model)
 
-    observation = resource.profile(provider=provider, update_cache=True)
+    observation = resource.profile(update_cache=True)
 
     assert resource.physical_profile is observation
 
@@ -46,7 +46,7 @@ def test_profile_absence_is_distinct_from_query_failure(tmp_path, monkeypatch):
     resource = File("missing", parent=model)
     provider = FilesystemProvider(root, resource_root=model)
 
-    absent = resource.profile(provider=provider)
+    absent = resource.profile()
     assert absent.exists is False
     assert absent.entry_type is None
     assert absent.size is None
@@ -64,7 +64,7 @@ def test_profile_absence_is_distinct_from_query_failure(tmp_path, monkeypatch):
         monkeypatch.setattr(provider, "resolve", lambda *args, **kwargs: DeniedPath())
 
     with pytest.raises(PermissionError, match="denied"):
-        resource.profile(provider=provider)
+        resource.profile()
 
 
 def test_profile_rejects_resource_type_mismatch(tmp_path):
@@ -76,7 +76,7 @@ def test_profile_rejects_resource_type_mismatch(tmp_path):
     provider = FilesystemProvider(root, resource_root=model)
 
     with pytest.raises(NotADirectoryError):
-        resource.profile(provider=provider)
+        resource.profile()
 
 
 def test_directory_profile_reports_directory_metadata(tmp_path):
@@ -87,7 +87,7 @@ def test_directory_profile_reports_directory_metadata(tmp_path):
     resource = Directory("folder", parent=model)
     provider = FilesystemProvider(root, resource_root=model)
 
-    observation = resource.profile(provider=provider)
+    observation = resource.profile()
 
     assert observation.exists is True
     assert observation.entry_type == "directory"
