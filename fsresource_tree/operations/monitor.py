@@ -50,7 +50,7 @@ def _profile_state(profile: PhysicalProfile) -> tuple:
     """Comparable profile fields, excluding the observation timestamp."""
     return (
         profile.exists, profile.entry_type, profile.size,
-        profile.last_access_time, profile.last_modified_time,
+        profile.last_modified_time,
         profile.creation_time, profile.permissions, profile.owner_id,
         profile.group_id, profile.device_id, profile.inode,
         profile.link_count, profile.native_attributes,
