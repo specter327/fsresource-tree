@@ -317,6 +317,7 @@ def test_path_based_operations_reject_reparse_point_ancestors(
     provider = FilesystemProvider(root, resource_root=model)
     # Force the path-based implementation so this regression also exercises
     # the Windows fallback on POSIX CI hosts.
+    provider.close()
     provider._descriptor_mode = False
 
     if operation == "purge":
