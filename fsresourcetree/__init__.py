@@ -13,6 +13,8 @@ from .exceptions import (
     InvalidParentError,
     ResourceAlreadyRegisteredError,
     UnsupportedOperationError,
+    ProviderNotConfiguredError,
+    UnsupportedPlatformError,
     ResourceNotFoundError,
     ResourceTreeError,
 )
@@ -43,4 +45,6 @@ __all__ = [
     "ResourceAlreadyRegisteredError",
     "InvalidParentError",
     "UnsupportedOperationError",
+    "ProviderNotConfiguredError",
+    "UnsupportedPlatformError",
 ]
