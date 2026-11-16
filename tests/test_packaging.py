@@ -4,11 +4,11 @@ import fsresourcetree as fs
 
 
 def test_distribution_version_matches_package_version():
-    assert metadata.version("fsresourcetree") == fs.__version__
+    assert metadata.version("fsresource-tree") == fs.__version__
 
 
 def test_distribution_declares_the_supported_core_dependency():
-    requirements = metadata.requires("fsresourcetree") or []
+    requirements = metadata.requires("fsresource-tree") or []
     assert "resourcetree>=0.5.0" in requirements
 
 
