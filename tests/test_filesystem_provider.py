@@ -1,10 +1,10 @@
-import stat
 from pathlib import Path
+import stat
 from types import SimpleNamespace
 
 import pytest
 
-from fsresource_tree import Directory, File
+from fsresource_tree import Directory, File, resource_from_path
 from fsresource_tree.providers import FilesystemProvider
 from fsresource_tree.operations import create, delete, exists, path, walk
 
@@ -115,8 +115,9 @@ def test_provider_rejects_resources_from_another_logical_root(tmp_path):
     with pytest.raises(ValueError, match="logical root"):
         provider.resolve(foreign)
 
-@pytest.mark.parametrize("name", ["C:", "CON", "NUL.txt", "trailing.", "trailing "])
-def test_provider_rejects_nonportable_path_components(tmp_path, name):
+@pytest.mark.skipif(__import__("os").name != "nt", reason="Windows-specific path restrictions")
+@pytest.mark.parametrize("name", ["C:", "CON", "NUL.txt", "trailing.", "trailing ", "back\\slash"])
+def test_provider_rejects_invalid_windows_path_components(tmp_path, name):
     root = tmp_path / "sandbox"
     root.mkdir()
     model = Directory("root")
@@ -125,6 +126,23 @@ def test_provider_rejects_nonportable_path_components(tmp_path, name):
 
     with pytest.raises(ValueError):
         provider.resolve(invalid)
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="POSIX-specific path semantics")
+@pytest.mark.parametrize("name", ["C:", "CON", "NUL.txt", "trailing.", "trailing ", "back\\slash"])
+def test_provider_accepts_valid_posix_path_components(tmp_path, name):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    resource = File(name, parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+
+    target = provider.create(resource)
+
+    assert target.name == name
+    assert target.is_file()
+    assert provider.exists(resource)
+    assert provider.delete(resource)
 
 
 @pytest.mark.skipif(__import__("os").name != "posix", reason="descriptor-relative provider is POSIX-specific")
@@ -267,6 +285,23 @@ def test_posix_create_blocks_symlink_inserted_after_parent_resolution(tmp_path, 
     finally:
         provider.close()
 
+@pytest.mark.skipif(__import__("os").name != "posix", reason="POSIX supports trailing-dot filenames")
+def test_provider_operates_on_materialized_trailing_dot_file(tmp_path):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    physical_file = root / "report."
+    physical_file.touch()
+    model = Directory("root")
+    resource = resource_from_path(physical_file, parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+
+    assert isinstance(resource, File)
+    assert resource.filename() == "report."
+    assert provider.exists(resource)
+    assert provider.delete(resource)
+    assert provider.create(resource) == physical_file
+    assert provider.exists(resource)
+    assert provider.delete(resource)
 
 
 @pytest.mark.parametrize("operation", ["create", "delete", "purge"])
@@ -418,6 +453,36 @@ def test_path_based_operations_reject_replaced_configured_root(
         assert (root / "folder" / "payload").read_text(encoding="utf-8") == "protected"
     else:
         assert (root / "folder" / "keep").read_text(encoding="utf-8") == "protected"
+
+
+def test_path_based_profile_fails_closed_without_stable_root_identity(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    model = Directory("root")
+    provider = FilesystemProvider(root, resource_root=model)
+    provider.close()
+    provider._descriptor_mode = False
+
+    original_root_info = root.lstat()
+    provider._root_identity = (original_root_info.st_dev, 0)
+    original_lstat = Path.lstat
+
+    def fake_lstat(path):
+        if path == root:
+            return SimpleNamespace(
+                st_mode=original_root_info.st_mode,
+                st_dev=original_root_info.st_dev,
+                st_ino=0,
+                st_file_attributes=0,
+            )
+        return original_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+
+    with pytest.raises(ValueError, match="no stable file identity"):
+        provider.profile(model)
 
 
 def test_provider_rejects_root_replacement_during_initialization(tmp_path, monkeypatch):

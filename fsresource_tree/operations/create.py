@@ -2,19 +2,18 @@
 
 from ..core.directory import Directory
 from ..core.file import File
-from ..providers import FilesystemProvider
+from ..providers import FilesystemProviderProtocol, require_provider_operation
 from .walker import walk
 
 
 def create(
     resource: Directory | File,
     *,
-    provider: FilesystemProvider,
+    provider: FilesystemProviderProtocol,
     recursive_children: bool = False,
 ) -> bool:
-    if not isinstance(provider, FilesystemProvider):
-        raise TypeError("provider must be a FilesystemProvider")
+    create_physical = require_provider_operation(provider, "create")
     nodes = walk(resource) if recursive_children else iter((resource,))
     for node in nodes:
-        provider.create(node)
+        create_physical(node)
     return True

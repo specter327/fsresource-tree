@@ -17,3 +17,7 @@ class ResourceAlreadyRegisteredError(ResourceTreeError, ValueError):
 
 class InvalidParentError(ResourceTreeError, ValueError):
     """El parent indicado no es un Directory válido o no está registrado."""
+
+
+class UnsupportedOperationError(ResourceTreeError, NotImplementedError):
+    """The selected provider does not support a requested filesystem operation."""
