@@ -37,7 +37,7 @@ def main() -> None:
             subprocess.check_call([str(python), "-m", "pip", "install", "--no-deps", artifact])
             code = (
                 "from importlib import metadata; import fsresourcetree as package; "
-                f"assert metadata.version('fsresourcetree') == {args.version!r}; "
+                f"assert metadata.version('fsresource-tree') == {args.version!r}; "
                 "from fsresourcetree import Directory, File, FSResourceTree, FilesystemProvider; "
                 "root = Directory('root'); File('sample', extension='txt', parent=root); "
                 "tree = FSResourceTree(roots=[root]); "
