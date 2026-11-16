@@ -166,6 +166,14 @@ These values are observations, not immutable model identity. The model must dist
 
 Decision helpers such as `is_readable()`, `is_writable()` and `is_executable()` must ask the provider about the relevant effective security context. They must not infer effective access solely from Unix mode bits or a portable permission abstraction. The API should allow an explicit user/security identity where the platform supports it and clearly state when only the current process identity can be checked.
 
+### Effective access query semantics
+
+The public `readable()`, `writable()` and `executable()` helpers are provider-backed observations for the current process identity. The local POSIX provider requests effective IDs when the runtime exposes `os.access(..., effective_ids=True)`; on runtimes without that support it falls back to the platform default identity semantics. The current API does not impersonate arbitrary users, groups or service accounts and does not evaluate Linux capabilities or every ACL implementation.
+
+On Windows, Python's `os.access()` behavior is not a complete NTFS security-descriptor/ACL evaluator. A true arbitrary-principal Windows access check would require token and security-descriptor APIs and is not claimed by this implementation. These helpers therefore report the host API's current-process result, not a portable or exhaustive authorization decision.
+
+A missing entry returns `False`. Symlinks/reparse points and resource-type mismatches are rejected. For a Directory, execute means search/traversal permission. Every result is a point-in-time observation subject to TOCTOU: permissions, ACLs, mount state or the entry itself can change before a subsequent operation. The operation itself remains authoritative and may still fail.
+
 ## 8. Monitoring
 
 The initial monitoring strategy may use explicit polling for an individual resource:
@@ -190,7 +198,7 @@ The following describes code that exists now, not the target architecture above.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
 - Implemented: public physical directory scanning via `operations.scan()` with recursive discovery, exclusions, additive reconciliation, no-follow entry classification and configurable error handling.
 - Implemented: public copy/move/rename operations. The local provider uses descriptor-relative POSIX move and opaque regular-file copy where available; directory copy is model-driven and creates destination directories exclusively. The Windows branch remains path-based. These operations are not atomic transactions against hostile concurrent filesystem mutation.
-- Not implemented yet: platform-specific provider classes and loader, effective-access helpers, monitoring/listeners and change events.
+- Implemented: `readable()`, `writable()` and `executable()` provider-backed checks for the current process identity, with POSIX effective-ID use where available and documented Windows limitations. These are observations, not authorization guarantees.\n- Not implemented yet: platform-specific provider classes and loader, arbitrary-principal access evaluation, monitoring/listeners and change events.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
