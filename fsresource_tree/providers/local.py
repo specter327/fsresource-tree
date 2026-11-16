@@ -804,3 +804,66 @@ class FilesystemProvider:
             link_count=info.st_nlink,
             native_attributes=native,
         )
+
+
+    def access(self, resource: Directory | File, mode: int) -> bool:
+        """Observe access for the process identity using native OS checks.
+
+        POSIX uses effective IDs when Python exposes that option. Platforms
+        without effective-ID support use os.access defaults; Windows semantics
+        are limited by Python's os.access implementation and are not a full
+        ACL evaluator. This is a point-in-time query, not an authorization
+        guarantee for a later operation.
+        """
+        from ..core.directory import Directory
+        from ..core.file import File
+
+        if not isinstance(resource, (Directory, File)):
+            raise TypeError("resource must be a Directory or File")
+        if isinstance(mode, bool) or not isinstance(mode, int):
+            raise TypeError("mode must be an integer access mask")
+        allowed = os.R_OK | os.W_OK | os.X_OK | os.F_OK
+        if mode < 0 or mode & ~allowed:
+            raise ValueError("mode contains unsupported access flags")
+
+        relative = self.relative_path(resource)
+        try:
+            info = self._stat_relative(relative) if self.race_resistant else self.resolve(
+                resource, allow_missing=False
+            ).lstat()
+        except FileNotFoundError:
+            return False
+        if self._is_reparse_point(info):
+            raise ValueError("access checks refuse symbolic links and reparse points")
+        if isinstance(resource, Directory) and not stat.S_ISDIR(info.st_mode):
+            raise NotADirectoryError(self._root / relative)
+        if isinstance(resource, File) and not stat.S_ISREG(info.st_mode):
+            raise IsADirectoryError(self._root / relative)
+
+        kwargs = {}
+        if os.name == "posix" and os.access in os.supports_effective_ids:
+            kwargs["effective_ids"] = True
+
+        if (
+            self.race_resistant
+            and os.access in os.supports_dir_fd
+            and os.access in os.supports_follow_symlinks
+        ):
+            if relative.parts:
+                parent_fd, name = self._open_parent_fd(relative)
+                try:
+                    return os.access(
+                        name, mode, dir_fd=parent_fd,
+                        follow_symlinks=False, **kwargs
+                    )
+                finally:
+                    os.close(parent_fd)
+            return os.access(
+                ".", mode, dir_fd=self._root_fd,
+                follow_symlinks=False, **kwargs
+            )
+
+        target = self._root / relative
+        if not self.race_resistant:
+            target = self.resolve(resource, allow_missing=False)
+        return os.access(target, mode, **kwargs)
