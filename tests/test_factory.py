@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from fsresource_tree import Directory, File, resource_from_path, validate_path
+from fsresourcetree import Directory, File, resource_from_path, validate_path
 
 
 def test_validate_path_identifies_existing_file_and_directory(tmp_path):
