@@ -102,7 +102,7 @@ class FilesystemProvider:
             platform=self._platform,
             filesystem=None,
             race_resistant=self.race_resistant,
-            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile"}),
+            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "move", "copy_file"}),
             metadata_fields=frozenset(metadata_fields),
         )
 
@@ -573,6 +573,128 @@ class FilesystemProvider:
         shutil.rmtree(target)
         return True
 
+
+    def move(self, resource: Directory | File, destination: Directory, new_name: str) -> Path:
+        """Move/rename one modeled entry without replacing an existing target."""
+        from ..core.directory import Directory
+        from ..core.file import File
+
+        if not isinstance(destination, Directory):
+            raise TypeError("destination must be a Directory")
+        if not isinstance(resource, (Directory, File)):
+            raise TypeError("resource must be a Directory or File")
+        if resource is self._resource_root:
+            raise PermissionError("the provider root cannot be moved or renamed")
+        old_relative = self.relative_path(resource)
+        parent_relative = self.relative_path(destination)
+        if isinstance(resource, File):
+            target_component = self._segment(new_name + (("." + resource.extension) if resource.extension else ""))
+        else:
+            target_component = self._segment(new_name)
+        new_relative = parent_relative / target_component
+        if new_relative == old_relative:
+            return self._root / new_relative
+        if isinstance(resource, Directory) and old_relative in new_relative.parents:
+            raise ValueError("a directory cannot be moved into itself or one of its descendants")
+        if self.race_resistant:
+            source_parent_fd, source_name = self._open_parent_fd(old_relative)
+            destination_parent_fd = None
+            try:
+                destination_parent_fd = self._open_parent_fd(parent_relative) if parent_relative.parts else os.dup(self._root_fd)
+                source_info = os.stat(source_name, dir_fd=source_parent_fd, follow_symlinks=False)
+                if self._is_reparse_point(source_info):
+                    raise ValueError("symbolic links and reparse points cannot be moved")
+                if isinstance(resource, Directory) and not stat.S_ISDIR(source_info.st_mode):
+                    raise NotADirectoryError(self._root / old_relative)
+                if isinstance(resource, File) and not stat.S_ISREG(source_info.st_mode):
+                    raise IsADirectoryError(self._root / old_relative)
+                try:
+                    os.stat(target_component, dir_fd=destination_parent_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise FileExistsError(self._root / new_relative)
+                os.rename(source_name, target_component, src_dir_fd=source_parent_fd, dst_dir_fd=destination_parent_fd)
+            finally:
+                if destination_parent_fd is not None:
+                    os.close(destination_parent_fd)
+                os.close(source_parent_fd)
+        else:
+            source = self.resolve(resource, allow_missing=False)
+            destination_path = self.resolve(destination, allow_missing=False) / target_component
+            if destination_path.exists() or destination_path.is_symlink():
+                raise FileExistsError(destination_path)
+            if isinstance(resource, Directory) and source in destination_path.parents:
+                raise ValueError("a directory cannot be moved into itself or one of its descendants")
+            os.rename(source, destination_path)
+        return self._root / new_relative
+
+    def copy_file(self, source: File, destination: Directory, new_name: str) -> Path:
+        """Copy opaque file bytes into a new physical file; bytes are never returned."""
+        from ..core.directory import Directory
+        from ..core.file import File
+
+        if not isinstance(source, File) or not isinstance(destination, Directory):
+            raise TypeError("copy_file requires a File source and Directory destination")
+        source_relative = self.relative_path(source)
+        destination_relative = self.relative_path(destination)
+        target_component = self._segment(new_name + (("." + source.extension) if source.extension else ""))
+        target_relative = destination_relative / target_component
+        if self.race_resistant:
+            source_parent_fd, source_name = self._open_parent_fd(source_relative)
+            destination_parent_fd = None
+            source_fd = target_fd = None
+            try:
+                destination_parent_fd = self._open_parent_fd(destination_relative) if destination_relative.parts else os.dup(self._root_fd)
+                source_fd = os.open(source_name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_parent_fd)
+                source_info = os.fstat(source_fd)
+                if not stat.S_ISREG(source_info.st_mode):
+                    raise ValueError("only regular files can be copied")
+                target_fd = os.open(
+                    target_component,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    stat.S_IMODE(source_info.st_mode),
+                    dir_fd=destination_parent_fd,
+                )
+                while True:
+                    chunk = os.read(source_fd, 1024 * 1024)
+                    if not chunk:
+                        break
+                    view = memoryview(chunk)
+                    while view:
+                        written = os.write(target_fd, view)
+                        view = view[written:]
+            except BaseException:
+                if target_fd is not None:
+                    os.close(target_fd)
+                    target_fd = None
+                try:
+                    os.unlink(target_component, dir_fd=destination_parent_fd)
+                except (FileNotFoundError, TypeError):
+                    pass
+                raise
+            finally:
+                if target_fd is not None:
+                    os.close(target_fd)
+                if source_fd is not None:
+                    os.close(source_fd)
+                if destination_parent_fd is not None:
+                    os.close(destination_parent_fd)
+                os.close(source_parent_fd)
+        else:
+            import shutil
+
+            source_path = self.resolve(source, allow_missing=False)
+            destination_path = self.resolve(destination, allow_missing=False) / target_component
+            if destination_path.exists() or destination_path.is_symlink():
+                raise FileExistsError(destination_path)
+            info = source_path.lstat()
+            if self._is_reparse_point(info) or not stat.S_ISREG(info.st_mode):
+                raise ValueError("only regular files can be copied")
+            with source_path.open("rb") as reader, destination_path.open("xb") as writer:
+                shutil.copyfileobj(reader, writer, length=1024 * 1024)
+            os.chmod(destination_path, stat.S_IMODE(info.st_mode))
+        return self._root / target_relative
 
     def profile(self, resource: Directory | File) -> PhysicalProfile:
         """Observe physical metadata without opening or reading file contents.
