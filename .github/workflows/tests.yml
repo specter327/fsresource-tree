@@ -62,3 +62,7 @@ jobs:
       - name: Run tests
         working-directory: fsresource-tree
         run: python -m pytest -q
+
+      - name: Run complete end-to-end demonstration
+        working-directory: fsresource-tree
+        run: python examples/complete_demo.py
