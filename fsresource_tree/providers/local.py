@@ -809,11 +809,11 @@ class FilesystemProvider:
     def access(self, resource: Directory | File, mode: int) -> bool:
         """Observe access for the process identity using native OS checks.
 
-        POSIX uses effective IDs when Python exposes that option. Platforms
-        without effective-ID support use os.access defaults; Windows semantics
-        are limited by Python's os.access implementation and are not a full
-        ACL evaluator. This is a point-in-time query, not an authorization
-        guarantee for a later operation.
+        This provider advertises the operation only when Python exposes POSIX
+        effective-ID checks. It evaluates the current process effective UID/GID;
+        it cannot impersonate an arbitrary user or group. The result is a
+        point-in-time observation, not an authorization guarantee for a later
+        operation.
         """
         from ..core.directory import Directory
         from ..core.file import File
