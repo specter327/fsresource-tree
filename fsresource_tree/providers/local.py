@@ -102,7 +102,7 @@ class FilesystemProvider:
             platform=self._platform,
             filesystem=None,
             race_resistant=self.race_resistant,
-            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "move", "copy_file"}),
+            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "move", "copy_file", "create_exclusive"}),
             metadata_fields=frozenset(metadata_fields),
         )
 
@@ -573,6 +573,27 @@ class FilesystemProvider:
         shutil.rmtree(target)
         return True
 
+
+    def create_exclusive(self, resource: Directory) -> Path:
+        """Create a new directory and fail if any physical entry already exists."""
+        from ..core.directory import Directory
+
+        if not isinstance(resource, Directory):
+            raise TypeError("create_exclusive requires a Directory")
+        relative = self.relative_path(resource)
+        if not relative.parts:
+            raise PermissionError("the provider root already exists")
+        target = self._root / relative
+        if self.race_resistant:
+            parent_fd, name = self._open_parent_fd(relative)
+            try:
+                os.mkdir(name, dir_fd=parent_fd)
+            finally:
+                os.close(parent_fd)
+        else:
+            self.resolve(resource)
+            target.mkdir(exist_ok=False)
+        return target
 
     def move(self, resource: Directory | File, destination: Directory, new_name: str) -> Path:
         """Move/rename one modeled entry without replacing an existing target."""
