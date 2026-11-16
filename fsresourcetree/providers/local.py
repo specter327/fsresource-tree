@@ -42,7 +42,6 @@ class FilesystemProvider:
                 f"no filesystem provider is implemented for platform: {self._platform}"
             )
         self._resource_root = resource_root
-        resource_root.bind_provider(self)
         candidate = Path(root).expanduser()
         try:
             root_info = candidate.lstat()
@@ -80,6 +79,9 @@ class FilesystemProvider:
                 os.close(descriptor)
                 raise
             self._root_fd = descriptor
+        # Bind only after initialization succeeds; failed construction must not
+        # leave a partially initialized provider attached to the resource tree.
+        resource_root.bind_provider(self)
 
     @property
     def race_resistant(self) -> bool:
