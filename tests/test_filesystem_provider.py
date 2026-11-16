@@ -1,4 +1,6 @@
+import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -300,3 +302,55 @@ def test_path_based_operations_reject_symlinked_ancestors(tmp_path, monkeypatch,
             assert protected.read_text() == "protected"
     finally:
         provider.close()
+
+
+@pytest.mark.parametrize("operation", ["create", "delete", "purge"])
+def test_path_based_operations_reject_reparse_point_ancestors(
+    tmp_path, monkeypatch, operation
+):
+    root = tmp_path / "sandbox"
+    root.mkdir()
+    physical_parent = root / "parent"
+    physical_parent.mkdir()
+    model = Directory("root")
+    parent = Directory("parent", parent=model)
+    provider = FilesystemProvider(root, resource_root=model)
+    # Force the path-based implementation so this regression also exercises
+    # the Windows fallback on POSIX CI hosts.
+    provider._descriptor_mode = False
+
+    if operation == "purge":
+        target = Directory("target", parent=parent)
+        (physical_parent / "target").mkdir()
+    else:
+        target = File("payload", parent=parent)
+        if operation == "delete":
+            (physical_parent / "payload").write_text("protected", encoding="utf-8")
+
+    original_lstat = Path.lstat
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+
+    def fake_lstat(path):
+        if path == physical_parent:
+            return SimpleNamespace(
+                st_mode=stat.S_IFDIR | 0o755,
+                st_file_attributes=reparse_flag,
+            )
+        return original_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+
+    with pytest.raises(ValueError, match="reparse points"):
+        if operation == "create":
+            provider.create(target)
+        elif operation == "delete":
+            provider.delete(target)
+        else:
+            provider.purge(target)
+
+    if operation == "create":
+        assert not (physical_parent / "payload").exists()
+    elif operation == "delete":
+        assert (physical_parent / "payload").read_text(encoding="utf-8") == "protected"
+    else:
+        assert (physical_parent / "target").is_dir()
