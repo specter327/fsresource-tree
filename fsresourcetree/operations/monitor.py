@@ -7,10 +7,10 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Callable
 
 from ..core.directory import Directory
