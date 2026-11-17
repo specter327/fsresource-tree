@@ -42,6 +42,8 @@ class FilesystemProvider:
                 f"no filesystem provider is implemented for platform: {self._platform}"
             )
         self._resource_root = resource_root
+        self._monitor_lock = __import__("threading").RLock()
+        self._active_monitors = set()
         candidate = Path(root).expanduser()
         try:
             root_info = candidate.lstat()
@@ -116,10 +118,11 @@ class FilesystemProvider:
 
     def close(self) -> None:
         """Release the provider's pinned root descriptor and unbind the root."""
-        monitor = getattr(self._resource_root, "_filesystem_monitor", None)
-        if monitor is not None and monitor.running:
+        with self._monitor_lock:
+            active = tuple(monitor for monitor in self._active_monitors if monitor.running)
+        if active:
             raise RuntimeError(
-                "stop the directory filesystem monitor before closing its provider"
+                "stop all directory filesystem monitors before closing their provider"
             )
         if self._root_fd is not None:
             os.close(self._root_fd)
