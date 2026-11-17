@@ -143,18 +143,18 @@ class PollingMonitor:
                     return
                 raise RuntimeError("filesystem monitor is still stopping")
             self._stop_event.clear()
-            self._snapshot = self._collect_snapshot()
-            self._thread = threading.Thread(
-                target=self._run,
-                name=f"fsresourcetree-monitor-{self.directory.uid}",
-                daemon=True,
-            )
             registry_lock = getattr(self.provider, "_monitor_lock", None)
             registry = getattr(self.provider, "_active_monitors", None)
             if registry_lock is not None and registry is not None:
                 with registry_lock:
                     registry.add(self)
             try:
+                self._snapshot = self._collect_snapshot()
+                self._thread = threading.Thread(
+                    target=self._run,
+                    name=f"fsresourcetree-monitor-{self.directory.uid}",
+                    daemon=True,
+                )
                 self._thread.start()
             except BaseException:
                 if registry_lock is not None and registry is not None:
