@@ -133,12 +133,16 @@ class Directory(FilesystemResourceOperations, Container):
         """Stop this directory's polling monitor and release its worker thread."""
         with self._filesystem_monitor_lock:
             monitor = getattr(self, "_filesystem_monitor", None)
-            if monitor is None:
-                return False
-            monitor.stop(timeout=timeout)
-            if not monitor.running:
+        if monitor is None:
+            return False
+
+        # Do not hold the directory lock while joining: a listener may itself
+        # register/remove listeners and must be allowed to finish its callback.
+        monitor.stop(timeout=timeout)
+        with self._filesystem_monitor_lock:
+            if self._filesystem_monitor is monitor and not monitor.running:
                 self._filesystem_monitor = None
-            return True
+        return True
 
     def __repr__(self) -> str:
         return f"Directory(uid={self.uid!r}, name={self.name!r}, children={len(self.children)})"
