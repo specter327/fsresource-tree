@@ -187,3 +187,124 @@ def test_monitor_dispatches_from_background_worker(tmp_path):
     finally:
         root.disable_monitor(timeout=3)
         provider.close()
+
+
+@pytest.mark.parametrize("initial_kind", ["file", "directory"])
+def test_monitor_recovers_from_physical_type_replacement(tmp_path, initial_kind):
+    physical, root, provider = make_root(tmp_path)
+    entry = physical / "changing"
+    if initial_kind == "file":
+        entry.touch()
+    else:
+        entry.mkdir()
+        (entry / "nested.txt").touch()
+    unrelated = physical / "unrelated.txt"
+
+    events = []
+    root.add_listener(events.append)
+    try:
+        monitor = root.enable_monitor(interval=60)
+        old_resource = root.find("changing")
+        assert isinstance(old_resource, File if initial_kind == "file" else Directory)
+
+        if initial_kind == "file":
+            entry.unlink()
+            entry.mkdir()
+        else:
+            (entry / "nested.txt").unlink()
+            entry.rmdir()
+            entry.touch()
+        unrelated.touch()
+
+        detected = monitor._poll_once()
+        replacement = root.find("changing")
+        assert isinstance(replacement, Directory if initial_kind == "file" else File)
+        assert any(
+            event.change_type is FilesystemChangeType.DELETED
+            and event.resource is old_resource
+            for event in detected
+        )
+        assert any(
+            event.change_type is FilesystemChangeType.CREATED
+            and event.resource is replacement
+            for event in detected
+        )
+        assert any(
+            event.change_type is FilesystemChangeType.CREATED
+            and event.resource.name == "unrelated"
+            for event in detected
+        )
+        # A subsequent poll must remain healthy after the replacement.
+        (physical / "later.txt").touch()
+        later = monitor._poll_once()
+        assert any(
+            event.change_type is FilesystemChangeType.CREATED
+            and event.resource.name == "later"
+            for event in later
+        )
+    finally:
+        root.disable_monitor()
+        provider.close()
+
+
+def test_monitor_detects_library_rename_with_stable_uid(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    item_path = physical / "before.txt"
+    item_path.touch()
+    root.scan()
+    item = root.find("before")
+    assert isinstance(item, File)
+    events = []
+    root.add_listener(events.append)
+
+    try:
+        monitor = root.enable_monitor(interval=60)
+        original_uid = item.uid
+        item.rename("after")
+        detected = monitor._poll_once()
+
+        moved = next(
+            event for event in detected
+            if event.change_type is FilesystemChangeType.MOVED
+            and event.resource is item
+        )
+        assert item.uid == original_uid
+        assert moved.previous_path == "/root/before.txt"
+        assert moved.current_path == "/root/after.txt"
+        assert moved.previous is not None and moved.current is not None
+    finally:
+        root.disable_monitor()
+        provider.close()
+
+
+def test_monitor_detects_library_move_with_stable_uid(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    source = physical / "source"
+    destination = physical / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "item.txt").touch()
+    root.scan()
+    source_model = root.find("source")
+    destination_model = root.find("destination")
+    assert isinstance(source_model, Directory)
+    assert isinstance(destination_model, Directory)
+    item = source_model.find("item")
+    assert isinstance(item, File)
+
+    try:
+        monitor = root.enable_monitor(interval=60)
+        original_uid = item.uid
+        item.move(destination_model)
+        detected = monitor._poll_once()
+        moved = next(
+            event for event in detected
+            if event.change_type is FilesystemChangeType.MOVED
+            and event.resource is item
+        )
+        assert item.uid == original_uid
+        assert moved.previous_path == "/root/source/item.txt"
+        assert moved.current_path == "/root/destination/item.txt"
+    finally:
+        root.disable_monitor()
+        provider.close()
