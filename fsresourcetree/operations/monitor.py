@@ -149,7 +149,19 @@ class PollingMonitor:
                 name=f"fsresourcetree-monitor-{self.directory.uid}",
                 daemon=True,
             )
-            self._thread.start()
+            registry_lock = getattr(self.provider, "_monitor_lock", None)
+            registry = getattr(self.provider, "_active_monitors", None)
+            if registry_lock is not None and registry is not None:
+                with registry_lock:
+                    registry.add(self)
+            try:
+                self._thread.start()
+            except BaseException:
+                if registry_lock is not None and registry is not None:
+                    with registry_lock:
+                        registry.discard(self)
+                self._thread = None
+                raise
 
     def stop(self, *, timeout: float | None = None) -> None:
         if timeout is not None:
@@ -165,6 +177,11 @@ class PollingMonitor:
                 raise TimeoutError("filesystem monitor did not stop before timeout")
         if thread is None or not thread.is_alive():
             self._thread = None
+            registry_lock = getattr(self.provider, "_monitor_lock", None)
+            registry = getattr(self.provider, "_active_monitors", None)
+            if registry_lock is not None and registry is not None:
+                with registry_lock:
+                    registry.discard(self)
 
     def _collect_snapshot(self) -> dict[str, tuple[Directory | File, PhysicalProfile]]:
         root_profile = self.directory.profile()
@@ -234,14 +251,21 @@ class PollingMonitor:
         return tuple(events)
 
     def _run(self) -> None:
-        while not self._stop_event.wait(self.interval):
-            try:
-                self._poll_once()
-            except Exception:
-                _LOG.exception(
-                    "filesystem monitor polling failed for %s",
-                    self.directory.uid,
-                )
+        try:
+            while not self._stop_event.wait(self.interval):
+                try:
+                    self._poll_once()
+                except Exception:
+                    _LOG.exception(
+                        "filesystem monitor polling failed for %s",
+                        self.directory.uid,
+                    )
+        finally:
+            registry_lock = getattr(self.provider, "_monitor_lock", None)
+            registry = getattr(self.provider, "_active_monitors", None)
+            if registry_lock is not None and registry is not None:
+                with registry_lock:
+                    registry.discard(self)
 
 
 __all__ = ["FilesystemChangeEvent", "FilesystemChangeType", "PollingMonitor"]
