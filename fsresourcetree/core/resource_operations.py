@@ -73,6 +73,30 @@ class FilesystemResourceOperations:
         from ..operations.exists import exists
         return exists(self, provider=self._require_provider())
 
+    def readable(self) -> bool:
+        """Observe read access for the current process identity."""
+        from ..operations.access import readable
+        return readable(self, provider=self._require_provider())
+
+    def writable(self) -> bool:
+        """Observe write access for the current process identity."""
+        from ..operations.access import writable
+        return writable(self, provider=self._require_provider())
+
+    def executable(self) -> bool:
+        """Observe execute (file) or search/traversal (directory) access."""
+        from ..operations.access import executable
+        return executable(self, provider=self._require_provider())
+
+    def is_readable(self) -> bool:
+        return self.readable()
+
+    def is_writable(self) -> bool:
+        return self.writable()
+
+    def is_executable(self) -> bool:
+        return self.executable()
+
     def rename(self, new_name: str):
         from ..operations.relocate import rename
         return rename(self, new_name, provider=self._require_provider())

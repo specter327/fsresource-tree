@@ -29,6 +29,25 @@ The model and the real filesystem are separate sources of truth. A File or Direc
 
 `File.profile()` and `Directory.profile()` query provider-backed metadata and return an immutable `PhysicalProfile` snapshot. The default call does not mutate the resource; pass `update_cache=True` to store the snapshot as `resource.physical_profile`. A missing entry is represented by `exists=False`; permission and I/O failures remain exceptions. Every snapshot records its UTC observation time. A cached observation is never a guarantee that the physical entry has not changed since it was queried.
 
+## Effective access checks
+
+```python
+from fsresourcetree import Directory, File, FilesystemProvider, readable, writable, executable
+
+root = Directory("workspace")
+report = File("report.txt", parent=root)
+
+with FilesystemProvider("/srv/workspace", resource_root=root) as provider:
+    can_read = report.readable()
+    can_write = report.writable()
+    can_execute = report.executable()
+
+    # Module-level functions remain available for explicit dependency injection.
+    assert readable(report, provider=provider) == can_read
+```
+
+The methods are available on both `File` and `Directory`; `is_readable()`, `is_writable()` and `is_executable()` are equivalent aliases. For directories, execute access means search/traversal permission. Checks use the current process identity. POSIX uses effective UID/GID checks where Python exposes them; Windows follows native `os.access()` semantics and is not a complete NTFS ACL evaluator. Arbitrary users/groups cannot be impersonated. A missing entry returns `False`; symbolic links/reparse points, invalid resource types and other I/O failures remain errors. Results are point-in-time observations, not authorization guarantees for later operations; the attempted operation remains authoritative. On POSIX, search-only directory descriptors (`O_PATH`/`O_SEARCH` where available) allow checks through known parent directories without requiring read permission on those directories. When the provider is descriptor-pinned but the runtime cannot perform descriptor-relative `os.access()` checks, it raises `UnsupportedOperationError` rather than falling back to a path-based check outside that descriptor boundary.
+
 ## Scope and non-goals
 
 **`fsresourcetree` does not expose file-content reading or writing APIs.** Filesystem-level `copy()` remains in scope as an opaque provider operation: callers request a copy but never receive or manipulate the transferred bytes.

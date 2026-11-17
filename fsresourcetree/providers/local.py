@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..profile import PhysicalProfile
-from ..exceptions import UnsupportedPlatformError
+from ..exceptions import UnsupportedOperationError, UnsupportedPlatformError
 from .contract import ProviderCapabilities
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ class FilesystemProvider:
             platform=self._platform,
             filesystem=None,
             race_resistant=self.race_resistant,
-            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "move", "copy_file", "create_exclusive"}),
+            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "access", "move", "copy_file", "create_exclusive"}),
             metadata_fields=frozenset(metadata_fields),
         )
 
@@ -131,10 +131,17 @@ class FilesystemProvider:
         self.close()
 
     @staticmethod
-    def _open_parent_at(root_fd: int, parts: tuple[str, ...]) -> tuple[int, str]:
+    def _open_parent_at(
+        root_fd: int,
+        parts: tuple[str, ...],
+        *,
+        directory_flags: int | None = None,
+    ) -> tuple[int, str]:
         if not parts:
             raise ValueError("the provider root has no parent resource")
-        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+        flags = (
+            os.O_RDONLY if directory_flags is None else directory_flags
+        ) | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
         current = os.dup(root_fd)
         try:
             for part in parts[:-1]:
@@ -146,10 +153,27 @@ class FilesystemProvider:
             os.close(current)
             raise
 
-    def _open_parent_fd(self, relative: Path) -> tuple[int, str]:
+    def _open_parent_fd(
+        self,
+        relative: Path,
+        *,
+        search_only: bool = False,
+    ) -> tuple[int, str]:
         if self._root_fd is None:
             raise RuntimeError("provider descriptor is closed or unavailable")
-        return self._open_parent_at(self._root_fd, tuple(relative.parts))
+        directory_flags = None
+        if search_only:
+            # O_PATH (Linux/Android) and O_SEARCH (where exposed) permit
+            # descriptor-relative traversal without requiring directory read
+            # permission. O_RDONLY remains the portable fallback.
+            directory_flags = getattr(
+                os, "O_PATH", getattr(os, "O_SEARCH", os.O_RDONLY)
+            )
+        return self._open_parent_at(
+            self._root_fd,
+            tuple(relative.parts),
+            directory_flags=directory_flags,
+        )
 
     def _open_directory_fd(self, relative: Path) -> int:
         """Open a directory beneath the pinned root and return its descriptor."""
@@ -167,12 +191,17 @@ class FilesystemProvider:
         finally:
             os.close(parent_fd)
 
-    def _stat_relative(self, relative: Path) -> os.stat_result:
+    def _stat_relative(
+        self,
+        relative: Path,
+        *,
+        search_only: bool = False,
+    ) -> os.stat_result:
         if self._root_fd is None:
             raise RuntimeError("provider descriptor is closed or unavailable")
         if not relative.parts:
             return os.fstat(self._root_fd)
-        parent_fd, name = self._open_parent_fd(relative)
+        parent_fd, name = self._open_parent_fd(relative, search_only=search_only)
         try:
             return os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         finally:
@@ -814,3 +843,76 @@ class FilesystemProvider:
             link_count=info.st_nlink,
             native_attributes=native,
         )
+
+
+    def access(self, resource: Directory | File, mode: int) -> bool:
+        """Observe access for the current process identity using native OS checks.
+
+        POSIX uses effective IDs when Python exposes that option. Other
+        runtimes use native os.access semantics; on Windows this is not a
+        complete NTFS ACL evaluator. This method cannot impersonate users or
+        groups and does not guarantee that a later operation will succeed.
+        """
+        from ..core.directory import Directory
+        from ..core.file import File
+
+        if not isinstance(resource, (Directory, File)):
+            raise TypeError("resource must be a Directory or File")
+        if isinstance(mode, bool) or not isinstance(mode, int):
+            raise TypeError("mode must be an integer access mask")
+        allowed = os.R_OK | os.W_OK | os.X_OK | os.F_OK
+        if mode < 0 or mode & ~allowed:
+            raise ValueError("mode contains unsupported access flags")
+
+        relative = self.relative_path(resource)
+        try:
+            info = self._stat_relative(
+                relative, search_only=True
+            ) if self.race_resistant else self.resolve(
+                resource, allow_missing=False
+            ).lstat()
+        except FileNotFoundError:
+            return False
+        if self._is_reparse_point(info):
+            raise ValueError("access checks refuse symbolic links and reparse points")
+        if isinstance(resource, Directory) and not stat.S_ISDIR(info.st_mode):
+            raise NotADirectoryError(self._root / relative)
+        if isinstance(resource, File) and not stat.S_ISREG(info.st_mode):
+            raise IsADirectoryError(self._root / relative)
+
+        kwargs = {}
+        if os.name == "posix" and os.access in os.supports_effective_ids:
+            kwargs["effective_ids"] = True
+
+        if (
+            self.race_resistant
+            and os.access in os.supports_dir_fd
+            and os.access in os.supports_follow_symlinks
+        ):
+            if relative.parts:
+                parent_fd, name = self._open_parent_fd(
+                    relative, search_only=True
+                )
+                try:
+                    return os.access(
+                        name, mode, dir_fd=parent_fd,
+                        follow_symlinks=False, **kwargs
+                    )
+                finally:
+                    os.close(parent_fd)
+            return os.access(
+                ".", mode, dir_fd=self._root_fd,
+                follow_symlinks=False, **kwargs
+            )
+
+        if self.race_resistant:
+            # Falling back to a path here would bypass the pinned root
+            # descriptor and could observe a replacement of the configured
+            # root. Fail closed when this runtime lacks descriptor-relative
+            # access checks instead of weakening the provider's guarantee.
+            raise UnsupportedOperationError(
+                "descriptor-relative access checks are unavailable on this runtime"
+            )
+
+        target = self.resolve(resource, allow_missing=False)
+        return os.access(target, mode, **kwargs)
