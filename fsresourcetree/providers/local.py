@@ -116,6 +116,11 @@ class FilesystemProvider:
 
     def close(self) -> None:
         """Release the provider's pinned root descriptor and unbind the root."""
+        monitor = getattr(self._resource_root, "_filesystem_monitor", None)
+        if monitor is not None and monitor.running:
+            raise RuntimeError(
+                "stop the directory filesystem monitor before closing its provider"
+            )
         if self._root_fd is not None:
             os.close(self._root_fd)
             self._root_fd = None
