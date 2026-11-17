@@ -1,7 +1,10 @@
 """Filesystem specialization built on top of the generic resourcetree core."""
 
 from . import operations, renderers
-from .operations import (\n    FilesystemChangeEvent, FilesystemChangeType, PollingMonitor,\n    ScanResult, copy, executable, move, readable, rename, scan, writable,\n)
+from .operations import (
+    FilesystemChangeEvent, FilesystemChangeType, PollingMonitor,
+    ScanResult, copy, executable, move, readable, rename, scan, writable,
+)
 from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
