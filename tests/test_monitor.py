@@ -137,11 +137,26 @@ def test_provider_cannot_close_while_monitor_is_running(tmp_path):
     _, root, provider = make_root(tmp_path)
     try:
         root.enable_monitor(interval=60)
-        with pytest.raises(RuntimeError, match="stop the directory filesystem monitor"):
+        with pytest.raises(RuntimeError, match="stop all directory filesystem monitors"):
             provider.close()
         assert root.monitor_enabled
     finally:
         root.disable_monitor()
+        provider.close()
+
+
+def test_provider_cannot_close_while_descendant_monitor_is_running(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    (physical / "nested").mkdir()
+    root.scan()
+    nested = root.find("nested")
+    assert isinstance(nested, Directory)
+    try:
+        nested.enable_monitor(interval=60)
+        with pytest.raises(RuntimeError, match="stop all directory filesystem monitors"):
+            provider.close()
+    finally:
+        nested.disable_monitor()
         provider.close()
 
 
