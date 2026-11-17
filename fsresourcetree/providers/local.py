@@ -120,7 +120,7 @@ class FilesystemProvider:
     def close(self) -> None:
         """Release the provider's pinned root descriptor and unbind the root."""
         with self._monitor_lock:
-            active = tuple(monitor for monitor in self._active_monitors if monitor.running)
+            active = bool(self._active_monitors)
         if active:
             raise RuntimeError(
                 "stop all directory filesystem monitors before closing their provider"
