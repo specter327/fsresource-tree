@@ -85,6 +85,22 @@ def test_access_rejects_symbolic_links(tmp_path):
             link.readable()
 
 
+def test_descriptor_provider_fails_closed_without_descriptor_relative_access(tmp_path, monkeypatch):
+    physical = tmp_path / "root"
+    physical.mkdir()
+    (physical / "item").touch()
+    root = Directory("root")
+    item = File("item", parent=root)
+
+    with FilesystemProvider(physical, resource_root=root) as provider:
+        if not provider.race_resistant:
+            pytest.skip("descriptor-relative provider mode is unavailable")
+
+        monkeypatch.setattr(os, "supports_dir_fd", set(os.supports_dir_fd) - {os.access})
+        with pytest.raises(NotImplementedError, match="descriptor-relative access checks"):
+            item.readable()
+
+
 def test_is_accessible_aliases_match_short_resource_methods(tmp_path):
     physical = tmp_path / "root"
     physical.mkdir()
