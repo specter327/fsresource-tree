@@ -107,7 +107,8 @@ def test_readable_file_through_search_only_parent(tmp_path):
 
     with FilesystemProvider(physical, resource_root=root):
         assert report.readable() is True
-        assert report.writable() is False
+        # File write access is independent of parent-directory write access.
+        assert report.writable() is True
 
 
 def test_descriptor_provider_fails_closed_without_descriptor_relative_access(tmp_path, monkeypatch):
