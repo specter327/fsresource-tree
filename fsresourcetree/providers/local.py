@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..profile import PhysicalProfile
-from ..exceptions import UnsupportedPlatformError
+from ..exceptions import UnsupportedOperationError, UnsupportedPlatformError
 from .contract import ProviderCapabilities
 
 if TYPE_CHECKING:
@@ -872,7 +872,14 @@ class FilesystemProvider:
                 follow_symlinks=False, **kwargs
             )
 
-        target = self._root / relative
-        if not self.race_resistant:
-            target = self.resolve(resource, allow_missing=False)
+        if self.race_resistant:
+            # Falling back to a path here would bypass the pinned root
+            # descriptor and could observe a replacement of the configured
+            # root. Fail closed when this runtime lacks descriptor-relative
+            # access checks instead of weakening the provider's guarantee.
+            raise UnsupportedOperationError(
+                "descriptor-relative access checks are unavailable on this runtime"
+            )
+
+        target = self.resolve(resource, allow_missing=False)
         return os.access(target, mode, **kwargs)
