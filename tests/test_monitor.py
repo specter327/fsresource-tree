@@ -128,6 +128,17 @@ def test_monitor_requires_a_bound_provider():
         Directory("root").enable_monitor()
 
 
+def test_monitor_cannot_start_after_provider_is_closed(tmp_path):
+    _, root, provider = make_root(tmp_path)
+    from fsresourcetree import PollingMonitor
+
+    monitor = PollingMonitor(root, interval=60)
+    provider.close()
+    with pytest.raises(RuntimeError, match="provider is closed"):
+        monitor.start()
+    assert provider._active_monitors == set()
+
+
 def test_monitor_rejects_non_callable_listener():
     with pytest.raises(TypeError, match="callback"):
         Directory("root").add_listener(None)
