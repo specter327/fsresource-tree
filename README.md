@@ -141,6 +141,38 @@ Available on both `File` and `Directory`: `create()`, `exists()`, `delete()`, `r
 
 Physical `delete()` and `purge()` do not detach the resource from the in-memory hierarchy. This preserves the distinction between the model and physical state.
 
+### Directory monitoring
+
+Monitoring is opt-in and uses a background polling thread. It compares physical metadata snapshots and dispatches `FilesystemChangeEvent` objects to listeners registered on a `Directory`. It does not read file contents.
+
+```python
+from fsresourcetree import FilesystemChangeType, resource_from_path
+
+root = resource_from_path("/srv/workspace")
+
+def on_change(event):
+    if event.change_type is FilesystemChangeType.CREATED:
+        print("Created:", event.resource.path())
+    elif event.change_type is FilesystemChangeType.DELETED:
+        print("Deleted:", event.resource.path())
+    elif event.change_type is FilesystemChangeType.MODIFIED:
+        print("Metadata changed:", event.resource.path())
+
+root.add_listener(on_change)
+try:
+    root.enable_monitor(interval=2.0, recursive=True)
+    # Keep the application running while monitoring is required.
+finally:
+    root.disable_monitor()
+    root.close_provider()
+```
+
+The API exposes `add_listener(callback)`, `remove_listener(callback)`, `monitor_enabled`, `enable_monitor(interval=..., recursive=True)` and `disable_monitor(timeout=None)`. The monitor resolves the provider already bound to the directory; it does not accept a second provider argument. A provider cannot be closed while its root directory's monitor worker is still running.
+
+Callbacks execute on the monitor's background thread and should return quickly. Listener exceptions are logged and isolated. The initial scan establishes a baseline and emits no historical creation events. Polling errors are logged and polling continues.
+
+Events are point-in-time metadata observations, not an atomic event journal. External rename/move operations may appear as deletion at the old path plus creation at the new path. Changes that occur and revert between polls can be missed; same-size content changes that preserve observable metadata cannot be detected. Access-time-only changes are ignored. Polling cost grows with the number of modeled resources and scan frequency; recursive monitoring should be limited to relevant subtrees. Native OS notification backends are not implemented.
+
 ## Generic core
 
 The underlying classes can be imported directly from `resourcetree`:
