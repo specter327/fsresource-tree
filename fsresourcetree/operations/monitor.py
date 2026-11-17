@@ -31,7 +31,12 @@ class FilesystemChangeType(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class FilesystemChangeEvent:
-    """One detected change to a modeled filesystem resource."""
+    """One detected change to a modeled filesystem resource.
+
+    ``previous_path`` and ``current_path`` preserve the logical location on
+    each side of a move; they are also populated for other event types when
+    that side of the observation exists.
+    """
 
     change_type: FilesystemChangeType
     resource: Directory | File
@@ -213,8 +218,10 @@ class PollingMonitor:
             parent = self.directory
             for segment in relative.parts[:-1]:
                 child = next(
-                    (item for item in parent.children
-                     if (item.filename() if isinstance(item, File) else item.name) == segment),
+                    (
+                        item for item in parent.children
+                        if (item.filename() if isinstance(item, File) else item.name) == segment
+                    ),
                     None,
                 )
                 if not isinstance(child, Directory):
@@ -224,8 +231,10 @@ class PollingMonitor:
             if parent is None:
                 continue
             stale = next(
-                (item for item in parent.children
-                 if (item.filename() if isinstance(item, File) else item.name) == relative.name),
+                (
+                    item for item in parent.children
+                    if (item.filename() if isinstance(item, File) else item.name) == relative.name
+                ),
                 None,
             )
             if stale is not None:
@@ -309,7 +318,12 @@ class PollingMonitor:
             )
 
         self._snapshot = current_snapshot
-        events.sort(key=lambda event: (event.current_path or event.previous_path or event.resource.path(), event.change_type.value))
+        events.sort(
+            key=lambda event: (
+                event.current_path or event.previous_path or event.resource.path(),
+                event.change_type.value,
+            )
+        )
         for event in events:
             self._dispatch(event)
         return tuple(events)
