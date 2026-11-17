@@ -172,7 +172,7 @@ The public `readable()`, `writable()` and `executable()` helpers are provider-ba
 
 On Windows, Python's `os.access()` behavior is not a complete NTFS security-descriptor/ACL evaluator. These helpers report the host API's current-process result, not a portable or exhaustive authorization decision.
 
-For directories, execute means search/traversal permission. Missing entries return `False`; symlinks/reparse points and resource-type mismatches are rejected. If a descriptor-pinned POSIX provider cannot perform descriptor-relative `os.access()` checks on a runtime, it raises `UnsupportedOperationError` rather than falling back to a path-based check that would bypass the pinned root. Every result is subject to TOCTOU: permissions, ACLs, mount state or the entry itself can change before a subsequent operation. The operation itself remains authoritative and may still fail.
+For directories, execute means search/traversal permission. Missing entries return `False`; symlinks/reparse points and resource-type mismatches are rejected. For descriptor-relative traversal, the local POSIX provider uses search-only directory descriptors (`O_PATH`/`O_SEARCH` where available), so checking a known file does not incorrectly require read permission on every parent directory. If a descriptor-pinned POSIX provider cannot perform descriptor-relative `os.access()` checks on a runtime, it raises `UnsupportedOperationError` rather than falling back to a path-based check that would bypass the pinned root. Every result is subject to TOCTOU: permissions, ACLs, mount state or the entry itself can change before a subsequent operation. The operation itself remains authoritative and may still fail.
 
 ## 8. Monitoring
 
