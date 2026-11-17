@@ -168,15 +168,20 @@ Decision helpers such as `is_readable()`, `is_writable()` and `is_executable()` 
 
 ## 8. Monitoring
 
-The initial monitoring strategy may use explicit polling for an individual resource:
+The current implementation provides opt-in polling scoped to a `Directory`:
 
-- `enable_monitor(interval=...)`
-- `disable_monitor()`
-- `add_listener(callback)`
+- `directory.enable_monitor(interval=..., recursive=True)`
+- `directory.disable_monitor(timeout=None)`
+- `directory.add_listener(callback)` / `directory.remove_listener(callback)`
+- `directory.monitor_enabled`
 
-Polling repeatedly queries metadata and compares observations before dispatching change events. It can consume substantial CPU, I/O and battery, especially at short intervals. It is intended only for a small number of critical resources, not whole trees or large resource collections.
+The monitor resolves the provider already bound to the selected directory. It periodically invokes the existing scan/profile operations and compares physical metadata snapshots. It emits immutable `FilesystemChangeEvent` objects with `CREATED`, `DELETED` or `MODIFIED` types. The initial scan establishes a baseline and emits no historical creation events. It does not read file contents.
 
-Monitoring must be opt-in, stoppable, resource-scoped, and explicit about polling cost and missed/intermediate changes. Native OS notification backends may be added later behind provider capabilities; they must not be falsely represented as universally available.
+Listener callbacks execute on the monitor thread; callbacks should return quickly. Listener exceptions and polling errors are logged and isolated so they do not terminate the worker. The provider must remain open for the monitor lifetime; provider closure is rejected while its root monitor worker is still running. Stop the monitor before closing the provider.
+
+This is a best-effort metadata observer, not an atomic event journal. External rename/move operations may appear as deletion plus creation. Changes that occur and revert between polls, and same-size content changes that preserve observable metadata, may be missed. Access-time-only changes are ignored. Polling cost scales with the number of modeled resources and interval; recursive monitoring is intended for relevant subtrees, not large trees or high-frequency whole-filesystem observation.
+
+Native OS notification backends are not implemented.
 
 ## 9. Current implementation status
 
@@ -190,7 +195,7 @@ The following describes code that exists now, not the target architecture above.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
 - Implemented: public physical directory scanning via `operations.scan()` with recursive discovery, exclusions, additive reconciliation, no-follow entry classification and configurable error handling.
 - Implemented: public copy/move/rename operations. The local provider uses descriptor-relative POSIX move and opaque regular-file copy where available; directory copy is model-driven and creates destination directories exclusively. The Windows branch remains path-based. These operations are not atomic transactions against hostile concurrent filesystem mutation.
-- Not implemented yet: platform-specific provider classes and loader, effective-access helpers, monitoring/listeners and change events.
+- Implemented: opt-in directory-scoped metadata polling, stoppable background workers, listener registration/removal and immutable created/deleted/modified events. Monitoring uses the provider-resolved scan/profile API, does not read file contents, and is best-effort rather than an atomic event journal.\n- Not implemented yet: platform-specific provider classes and loader, effective-access helpers and native OS notification backends.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
