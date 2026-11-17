@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -42,7 +43,7 @@ class FilesystemProvider:
                 f"no filesystem provider is implemented for platform: {self._platform}"
             )
         self._resource_root = resource_root
-        self._monitor_lock = __import__("threading").RLock()
+        self._monitor_lock = threading.RLock()
         self._active_monitors = set()
         candidate = Path(root).expanduser()
         try:
