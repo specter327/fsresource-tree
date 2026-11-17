@@ -45,6 +45,7 @@ class FilesystemProvider:
         self._resource_root = resource_root
         self._monitor_lock = threading.RLock()
         self._active_monitors = set()
+        self._monitor_closed = False
         candidate = Path(root).expanduser()
         try:
             root_info = candidate.lstat()
@@ -120,16 +121,16 @@ class FilesystemProvider:
     def close(self) -> None:
         """Release the provider's pinned root descriptor and unbind the root."""
         with self._monitor_lock:
-            active = bool(self._active_monitors)
-        if active:
-            raise RuntimeError(
-                "stop all directory filesystem monitors before closing their provider"
-            )
-        if self._root_fd is not None:
-            os.close(self._root_fd)
-            self._root_fd = None
-        if getattr(self._resource_root, "_filesystem_provider", None) is self:
-            del self._resource_root._filesystem_provider
+            if self._active_monitors:
+                raise RuntimeError(
+                    "stop all directory filesystem monitors before closing their provider"
+                )
+            self._monitor_closed = True
+            if self._root_fd is not None:
+                os.close(self._root_fd)
+                self._root_fd = None
+            if getattr(self._resource_root, "_filesystem_provider", None) is self:
+                del self._resource_root._filesystem_provider
 
     def __enter__(self) -> FilesystemProvider:
         if self._descriptor_mode and self._root_fd is None:
