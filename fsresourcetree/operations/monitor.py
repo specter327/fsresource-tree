@@ -72,6 +72,16 @@ def _profile_state(profile: PhysicalProfile) -> tuple:
     )
 
 
+def _resource_path(resource: Directory | File) -> str:
+    """Return the logical hierarchy path using physical File basenames."""
+    segments: list[str] = []
+    current: Directory | File | None = resource
+    while current is not None:
+        segments.append(current.filename() if isinstance(current, File) else current.name)
+        current = current.parent
+    return "/" + "/".join(reversed(segments))
+
+
 def _walk(directory: Directory, *, recursive: bool) -> tuple[Directory | File, ...]:
     resources: list[Directory | File] = [directory]
     if not recursive:
@@ -256,7 +266,7 @@ class PollingMonitor:
         snapshot: dict[str, tuple[Directory | File, PhysicalProfile, str]] = {}
         for resource in _walk(self.directory, recursive=self.recursive):
             observation = root_profile if resource is self.directory else resource.profile()
-            snapshot[resource.uid] = (resource, observation, resource.path())
+            snapshot[resource.uid] = (resource, observation, _resource_path(resource))
         return snapshot
 
     def _dispatch(self, event: FilesystemChangeEvent) -> None:
@@ -320,7 +330,7 @@ class PollingMonitor:
         self._snapshot = current_snapshot
         events.sort(
             key=lambda event: (
-                event.current_path or event.previous_path or event.resource.path(),
+                event.current_path or event.previous_path or _resource_path(event.resource),
                 event.change_type.value,
             )
         )
