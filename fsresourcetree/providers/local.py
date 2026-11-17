@@ -131,10 +131,17 @@ class FilesystemProvider:
         self.close()
 
     @staticmethod
-    def _open_parent_at(root_fd: int, parts: tuple[str, ...]) -> tuple[int, str]:
+    def _open_parent_at(
+        root_fd: int,
+        parts: tuple[str, ...],
+        *,
+        directory_flags: int | None = None,
+    ) -> tuple[int, str]:
         if not parts:
             raise ValueError("the provider root has no parent resource")
-        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+        flags = (
+            os.O_RDONLY if directory_flags is None else directory_flags
+        ) | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
         current = os.dup(root_fd)
         try:
             for part in parts[:-1]:
@@ -146,10 +153,27 @@ class FilesystemProvider:
             os.close(current)
             raise
 
-    def _open_parent_fd(self, relative: Path) -> tuple[int, str]:
+    def _open_parent_fd(
+        self,
+        relative: Path,
+        *,
+        search_only: bool = False,
+    ) -> tuple[int, str]:
         if self._root_fd is None:
             raise RuntimeError("provider descriptor is closed or unavailable")
-        return self._open_parent_at(self._root_fd, tuple(relative.parts))
+        directory_flags = None
+        if search_only:
+            # O_PATH (Linux/Android) and O_SEARCH (where exposed) permit
+            # descriptor-relative traversal without requiring directory read
+            # permission. O_RDONLY remains the portable fallback.
+            directory_flags = getattr(
+                os, "O_PATH", getattr(os, "O_SEARCH", os.O_RDONLY)
+            )
+        return self._open_parent_at(
+            self._root_fd,
+            tuple(relative.parts),
+            directory_flags=directory_flags,
+        )
 
     def _open_directory_fd(self, relative: Path) -> int:
         """Open a directory beneath the pinned root and return its descriptor."""
@@ -167,12 +191,17 @@ class FilesystemProvider:
         finally:
             os.close(parent_fd)
 
-    def _stat_relative(self, relative: Path) -> os.stat_result:
+    def _stat_relative(
+        self,
+        relative: Path,
+        *,
+        search_only: bool = False,
+    ) -> os.stat_result:
         if self._root_fd is None:
             raise RuntimeError("provider descriptor is closed or unavailable")
         if not relative.parts:
             return os.fstat(self._root_fd)
-        parent_fd, name = self._open_parent_fd(relative)
+        parent_fd, name = self._open_parent_fd(relative, search_only=search_only)
         try:
             return os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         finally:
@@ -837,7 +866,9 @@ class FilesystemProvider:
 
         relative = self.relative_path(resource)
         try:
-            info = self._stat_relative(relative) if self.race_resistant else self.resolve(
+            info = self._stat_relative(
+                relative, search_only=True
+            ) if self.race_resistant else self.resolve(
                 resource, allow_missing=False
             ).lstat()
         except FileNotFoundError:
@@ -859,7 +890,9 @@ class FilesystemProvider:
             and os.access in os.supports_follow_symlinks
         ):
             if relative.parts:
-                parent_fd, name = self._open_parent_fd(relative)
+                parent_fd, name = self._open_parent_fd(
+                    relative, search_only=True
+                )
                 try:
                     return os.access(
                         name, mode, dir_fd=parent_fd,
