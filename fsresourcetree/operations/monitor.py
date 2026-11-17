@@ -147,6 +147,8 @@ class PollingMonitor:
             registry = getattr(self.provider, "_active_monitors", None)
             if registry_lock is not None and registry is not None:
                 with registry_lock:
+                    if getattr(self.provider, "_monitor_closed", False):
+                        raise RuntimeError("filesystem provider is closed")
                     registry.add(self)
             try:
                 self._snapshot = self._collect_snapshot()
