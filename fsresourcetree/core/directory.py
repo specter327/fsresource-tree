@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 from .resource_operations import FilesystemResourceOperations
@@ -23,6 +24,9 @@ class Directory(FilesystemResourceOperations, Container):
         if parent is not None and not isinstance(parent, Directory):
             raise TypeError("a Directory parent must be a Directory")
         super().__init__(name=name, parent=parent, uid=uid, metadata=metadata)
+        self._filesystem_monitor_lock = threading.RLock()
+        self._filesystem_listeners = []
+        self._filesystem_monitor = None
 
     def _validate_attachment(self, resource) -> None:
         from .file import File
@@ -76,12 +80,7 @@ class Directory(FilesystemResourceOperations, Container):
         """Register a one-argument filesystem change callback on this directory."""
         if not callable(callback):
             raise TypeError("callback must be callable")
-        import threading
-
-        lock = getattr(self, "_filesystem_monitor_lock", None)
-        if lock is None:
-            lock = self._filesystem_monitor_lock = threading.RLock()
-        with lock:
+        with self._filesystem_monitor_lock:
             listeners = getattr(self, "_filesystem_listeners", None)
             if listeners is None:
                 listeners = self._filesystem_listeners = []
@@ -93,12 +92,7 @@ class Directory(FilesystemResourceOperations, Container):
 
     def remove_listener(self, callback) -> bool:
         """Remove a previously registered filesystem change callback."""
-        import threading
-
-        lock = getattr(self, "_filesystem_monitor_lock", None)
-        if lock is None:
-            lock = self._filesystem_monitor_lock = threading.RLock()
-        with lock:
+        with self._filesystem_monitor_lock:
             monitor = getattr(self, "_filesystem_monitor", None)
             removed = monitor.remove_listener(callback) if monitor is not None else False
             listeners = getattr(self, "_filesystem_listeners", [])
@@ -120,13 +114,9 @@ class Directory(FilesystemResourceOperations, Container):
         Keep the provider open until disable_monitor() returns. Listener
         callbacks execute on the monitor thread.
         """
-        import threading
         from ..operations.monitor import PollingMonitor
 
-        lock = getattr(self, "_filesystem_monitor_lock", None)
-        if lock is None:
-            lock = self._filesystem_monitor_lock = threading.RLock()
-        with lock:
+        with self._filesystem_monitor_lock:
             current = getattr(self, "_filesystem_monitor", None)
             if current is not None and current.running:
                 if current.enabled:
@@ -141,12 +131,7 @@ class Directory(FilesystemResourceOperations, Container):
 
     def disable_monitor(self, *, timeout: float | None = None) -> bool:
         """Stop this directory's polling monitor and release its worker thread."""
-        import threading
-
-        lock = getattr(self, "_filesystem_monitor_lock", None)
-        if lock is None:
-            lock = self._filesystem_monitor_lock = threading.RLock()
-        with lock:
+        with self._filesystem_monitor_lock:
             monitor = getattr(self, "_filesystem_monitor", None)
             if monitor is None:
                 return False
