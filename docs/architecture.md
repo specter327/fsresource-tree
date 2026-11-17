@@ -164,7 +164,15 @@ Common metadata candidates include:
 
 These values are observations, not immutable model identity. The model must distinguish cached values from freshly queried physical values.
 
-Decision helpers such as `is_readable()`, `is_writable()` and `is_executable()` must ask the provider about the relevant effective security context. They must not infer effective access solely from Unix mode bits or a portable permission abstraction. The API should allow an explicit user/security identity where the platform supports it and clearly state when only the current process identity can be checked.
+Decision helpers `readable()`, `writable()` and `executable()` (also exposed as resource methods and `is_*` aliases) ask the provider about access for the current process identity. POSIX uses effective UID/GID checks where Python exposes them; Windows follows native `os.access()` semantics and is not a general ACL evaluator. Arbitrary user/group impersonation is not implemented. The helpers do not infer access solely from Unix mode bits or cached profile metadata. A missing entry returns `False`; unsafe links and other I/O errors remain errors. These point-in-time checks are advisory and are not authorization guarantees for later operations.
+
+### Effective access query semantics
+
+The public `readable()`, `writable()` and `executable()` helpers are provider-backed observations for the current process identity. The local POSIX provider requests effective IDs when the runtime exposes `os.access(..., effective_ids=True)`; otherwise it uses the platform's default identity semantics. The API does not impersonate arbitrary users, groups or service accounts and does not evaluate Linux capabilities or every ACL implementation.
+
+On Windows, Python's `os.access()` behavior is not a complete NTFS security-descriptor/ACL evaluator. These helpers report the host API's current-process result, not a portable or exhaustive authorization decision.
+
+For directories, execute means search/traversal permission. Missing entries return `False`; symlinks/reparse points and resource-type mismatches are rejected. Every result is subject to TOCTOU: permissions, ACLs, mount state or the entry itself can change before a subsequent operation. The operation itself remains authoritative and may still fail.
 
 ## 8. Monitoring
 
@@ -190,7 +198,7 @@ The following describes code that exists now, not the target architecture above.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
 - Implemented: public physical directory scanning via `operations.scan()` with recursive discovery, exclusions, additive reconciliation, no-follow entry classification and configurable error handling.
 - Implemented: public copy/move/rename operations. The local provider uses descriptor-relative POSIX move and opaque regular-file copy where available; directory copy is model-driven and creates destination directories exclusively. The Windows branch remains path-based. These operations are not atomic transactions against hostile concurrent filesystem mutation.
-- Not implemented yet: platform-specific provider classes and loader, effective-access helpers, monitoring/listeners and change events.
+- Implemented: `readable()`, `writable()` and `executable()` provider-backed checks for the current process identity, with POSIX effective-ID use where available and documented Windows limitations. These are observations, not authorization guarantees.\n- Not implemented yet: platform-specific provider classes and loader, arbitrary-principal access evaluation, monitoring/listeners and change events.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
