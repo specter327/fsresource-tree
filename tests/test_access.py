@@ -85,6 +85,31 @@ def test_access_rejects_symbolic_links(tmp_path):
             link.readable()
 
 
+def test_readable_file_through_search_only_parent(tmp_path):
+    if os.name != "posix" or not (
+        hasattr(os, "O_PATH") or hasattr(os, "O_SEARCH")
+    ):
+        pytest.skip("search-only directory descriptors are unavailable")
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root privileges bypass the directory permission scenario")
+
+    physical = tmp_path / "root"
+    nested = physical / "search-only"
+    nested.mkdir(parents=True)
+    target = nested / "known.txt"
+    target.write_text("readable")
+    target.chmod(0o644)
+    nested.chmod(0o111)
+
+    root = Directory("root")
+    search_only = Directory("search-only", parent=root)
+    report = File("known", extension="txt", parent=search_only)
+
+    with FilesystemProvider(physical, resource_root=root):
+        assert report.readable() is True
+        assert report.writable() is False
+
+
 def test_descriptor_provider_fails_closed_without_descriptor_relative_access(tmp_path, monkeypatch):
     physical = tmp_path / "root"
     physical.mkdir()
