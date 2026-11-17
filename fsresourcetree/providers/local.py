@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -42,6 +43,8 @@ class FilesystemProvider:
                 f"no filesystem provider is implemented for platform: {self._platform}"
             )
         self._resource_root = resource_root
+        self._monitor_lock = threading.RLock()
+        self._active_monitors = set()
         candidate = Path(root).expanduser()
         try:
             root_info = candidate.lstat()
@@ -116,6 +119,12 @@ class FilesystemProvider:
 
     def close(self) -> None:
         """Release the provider's pinned root descriptor and unbind the root."""
+        with self._monitor_lock:
+            active = bool(self._active_monitors)
+        if active:
+            raise RuntimeError(
+                "stop all directory filesystem monitors before closing their provider"
+            )
         if self._root_fd is not None:
             os.close(self._root_fd)
             self._root_fd = None
