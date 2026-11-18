@@ -308,3 +308,31 @@ def test_monitor_detects_library_move_with_stable_uid(tmp_path):
     finally:
         root.disable_monitor()
         provider.close()
+
+
+def test_monitor_does_not_publish_partial_snapshot_after_scan_error(tmp_path, monkeypatch):
+    physical, root, provider = make_root(tmp_path)
+    from types import SimpleNamespace
+    from fsresourcetree import PollingMonitor
+
+    try:
+        monitor = PollingMonitor(root, interval=60)
+        baseline = monitor._collect_snapshot()
+        monitor._snapshot = baseline
+        original_scan = root.scan
+
+        def partial_scan(**kwargs):
+            result = original_scan(**kwargs)
+            return SimpleNamespace(
+                directory=result.directory,
+                skipped=result.skipped + (
+                    (str(physical / "inaccessible"), "Permission denied"),
+                ),
+            )
+
+        monkeypatch.setattr(root, "scan", partial_scan)
+        with pytest.raises(OSError, match="Permission denied"):
+            monitor._poll_once()
+        assert monitor._snapshot is baseline
+    finally:
+        provider.close()
