@@ -248,6 +248,15 @@ class PollingMonitor:
                 None,
             )
             if stale is not None:
+                # A replaced directory may own monitors itself or contain
+                # independently monitored descendants. Stop every worker
+                # before detaching the subtree: detached resources can no
+                # longer resolve the provider, and orphaned workers would
+                # keep the provider's active-monitor registry occupied.
+                if isinstance(stale, Directory):
+                    for descendant in reversed(_walk(stale, recursive=True)):
+                        if isinstance(descendant, Directory):
+                            descendant.disable_monitor()
                 parent.remove_child(stale)
                 changed = True
         return changed
