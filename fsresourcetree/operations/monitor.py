@@ -258,7 +258,20 @@ class PollingMonitor:
             result = self.directory.scan(
                 recursive=self.recursive, on_error="skip"
             )
-            if self._remove_type_conflicts(result.skipped):
+            recoverable_skips = {
+                "symbolic link or reparse point",
+                "unsupported filesystem entry type",
+            }
+            type_conflicts = []
+            for path, reason in result.skipped:
+                if reason.startswith("model/physical type conflict"):
+                    type_conflicts.append((path, reason))
+                elif reason not in recoverable_skips and reason != "excluded by scan policy":
+                    # A partial snapshot after an I/O/race error could make
+                    # resources look deleted. Preserve the previous snapshot
+                    # instead of dispatching false deletion events.
+                    raise OSError(f"filesystem scan failed at {path!r}: {reason}")
+            if self._remove_type_conflicts(tuple(type_conflicts)):
                 # Re-scan after removing stale model objects. This discovers
                 # replacement entries and prevents one conflict from
                 # permanently blocking unrelated changes.
