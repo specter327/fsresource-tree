@@ -336,3 +336,50 @@ def test_monitor_does_not_publish_partial_snapshot_after_scan_error(tmp_path, mo
         assert monitor._snapshot is baseline
     finally:
         provider.close()
+
+
+
+def test_type_replacement_stops_monitors_in_replaced_directory_subtree(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    changing = physical / "changing"
+    nested_path = changing / "nested"
+    nested_path.mkdir(parents=True)
+    (nested_path / "item.txt").touch()
+    root.scan()
+    stale = root.find("changing")
+    assert isinstance(stale, Directory)
+    nested = stale.find("nested")
+    assert isinstance(nested, Directory)
+
+    try:
+        root_monitor = root.enable_monitor(interval=60)
+        stale_monitor = stale.enable_monitor(interval=60)
+        nested_monitor = nested.enable_monitor(interval=60)
+        assert root_monitor.enabled
+        assert stale_monitor.enabled
+        assert nested_monitor.enabled
+
+        # Replace the monitored directory subtree with a file.
+        (nested_path / "item.txt").unlink()
+        nested_path.rmdir()
+        changing.rmdir()
+        changing.touch()
+
+        events = root_monitor._poll_once()
+        replacement = root.find("changing")
+        assert isinstance(replacement, File)
+        assert any(
+            event.change_type is FilesystemChangeType.DELETED
+            and event.resource is stale
+            for event in events
+        )
+        assert not stale_monitor.running
+        assert not nested_monitor.running
+        assert stale not in root.children
+        assert provider._active_monitors == {root_monitor}
+    finally:
+        root.disable_monitor()
+        # These calls remain safe after automatic subtree shutdown.
+        stale.disable_monitor()
+        nested.disable_monitor()
+        provider.close()
