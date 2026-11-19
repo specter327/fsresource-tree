@@ -197,7 +197,9 @@ The following describes code that exists now, not the target architecture above.
 
 - Model: `File`, `Directory`, `FSResourceTree`; generic metadata and hierarchy; specialized dict/JSON/XML serialization.
 - Materialization: `validate_path()` and `resource_from_path()` classify and materialize one existing entry.
-- Provider: one `FilesystemProvider`, explicitly configured with a physical root and logical Directory root.
+- Provider contract: structural `FilesystemProviderProtocol` and immutable per-instance `ProviderCapabilities`.
+- Provider selection: `ProviderLoader` detects GNU/Linux, Termux or Windows and instantiates `LinuxProvider`, `TermuxProvider` or `WindowsProvider`. These classes currently share the audited `FilesystemProvider` backend and enforce runtime compatibility; common operations are not duplicated without a demonstrated platform-specific need. Unsupported runtimes fail with `UnsupportedPlatformError`.
+- Provider lifecycle: a provider is explicitly configured with a physical root and logical Directory root; `resource_from_path()` uses the loader for top-level directories.
 - Public physical operations: `create()`, `exists()`, `delete()`, `copy()`, `move()` and `rename()`; provider also implements modeled recursive deletion and explicit `purge()`. Copy reproduces the modeled subtree only, assigns fresh UIDs and refuses existing targets; move/rename preserve UIDs. Cross-volume moves are not emulated.
 - In-memory operations: logical `path()`, `walk()`, `find()` and ancestor traversal.
 - Implemented: immutable `PhysicalProfile`, provider-backed `profile()` on File/Directory, UTC observation timestamps, explicit cache update, and distinct absent-versus-query-error behavior.
@@ -205,7 +207,7 @@ The following describes code that exists now, not the target architecture above.
 - Implemented: public copy/move/rename operations. The local provider uses descriptor-relative POSIX move and opaque regular-file copy where available; directory copy is model-driven and creates destination directories exclusively. The Windows branch remains path-based. These operations are not atomic transactions against hostile concurrent filesystem mutation.
 - Implemented: `readable()`, `writable()` and `executable()` provider-backed checks for the current process identity, with POSIX effective-ID use where available and documented Windows limitations. These are observations, not authorization guarantees.
 - Implemented: opt-in directory-scoped metadata polling, stoppable background workers, listener registration/removal and immutable created/deleted/modified/moved events. Monitoring reconciles physical file/directory type replacements, reports modeled rename/move paths, uses the provider-resolved scan/profile API, does not read file contents, and is best-effort rather than an atomic event journal.
-- Not implemented yet: platform-specific provider classes and loader, arbitrary-principal access evaluation and native OS notification backends.
+- Not implemented yet: independently specialized platform backends where distinct OS semantics require them, arbitrary-principal access evaluation and native OS notification backends.
 
 The provider source uses filesystem metadata/stat calls, directory enumeration, entry creation and deletion. These are filesystem-management operations, not direct file-content access APIs. Opaque filesystem-level copy is permitted as a management operation even if the operating system internally transfers file bytes. The package does not expose content reading, content writing, streaming or content-based hashing.
 
