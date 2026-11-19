@@ -123,8 +123,10 @@ On POSIX, descriptor-relative operations prevent symlink substitution, but they 
 ## Symbolic-link policy
 
 Symbolic links are explicit model resources, not aliases for their targets.
-`SymbolicLink` preserves the entry name and the raw target returned by
-`os.readlink()`. It is terminal: scanning never descends through it,
+`SymbolicLink` preserves the entry name and target returned by `os.readlink()`.
+On Windows, ordinary extended-length drive and UNC prefixes are normalized
+for a portable user-facing representation; other device namespaces are kept
+unchanged. It is terminal: scanning never descends through it,
 and the resource does not expose file/directory mutation operations.
 
 `Directory.scan(symlink_policy=...)` supports:
