@@ -120,6 +120,32 @@ The configured root is a security boundary. Providers must validate resource anc
 
 On POSIX, descriptor-relative operations prevent symlink substitution, but they are not an atomic transaction against concurrent renames of already-opened directories. If an untrusted actor can rename a traversed descendant (for example, `root/a/b`) outside the configured root after it has been opened, later create, delete or purge operations may act through that descriptor on the moved tree. The configured root, its ancestors, and every traversed parent/descendant directory must therefore be protected against hostile concurrent renames or mutations. The provider is not an OS sandbox. On Windows, path-based validation checks existing components for symbolic links and reparse points before create, delete and purge I/O, but cannot prevent a hostile concurrent replacement after validation. Full Windows handle-relative operations remain outside the current security claim.
 
+## Symbolic-link policy
+
+Symbolic links are explicit model resources, not aliases for their targets.
+`SymbolicLink` preserves the entry name and the raw target returned by
+`os.readlink()`. It is terminal: scanning never descends through it,
+and the resource does not expose file/directory mutation operations.
+
+`Directory.scan(symlink_policy=...)` supports:
+
+- `skip` (default): omit symbolic links and record them in
+  `ScanResult.skipped`.
+- `accept`: attach a `SymbolicLink` resource without resolving
+  or traversing its destination. Reparse points that are not reported as
+  symbolic links remain skipped.
+- `raise`: raise when a symbolic link or reparse point is encountered.
+
+The selected root has a separate opt-in:
+`resource_from_path(path, follow_symlinks=True)` resolves the chosen
+root to its canonical target before configuring the provider. This does not
+change descendant policy.
+
+Following descendant links is not supported. It requires provider-level
+logical-to-physical alias mapping and race-resistant root confinement; checking
+`Path.resolve()` alone is not a security boundary. Until that provider
+work is implemented, no scan policy follows descendant links.
+
 ## 5. Operations and side effects
 
 Operations are explicit. Constructing a resource, attaching it to a Directory, registering it in an FSResourceTree, serializing it, or searching it must not change the physical filesystem.
