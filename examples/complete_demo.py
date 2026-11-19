@@ -59,7 +59,7 @@ def main() -> None:
                 print("\n[2/10] Discover physical descendants with the public scan() API")
                 scan_result = root.scan(recursive=True)
                 print(f"  newly materialized resources: {scan_result.count}")
-                assert scan_result.count == 5
+                assert scan_result.count == 6
                 assert not scan_result.skipped
 
                 print("\n[3/10] Build and inspect the specialized ResourceTree index")
