@@ -8,7 +8,6 @@ from pathlib import Path
 from ..core.directory import Directory
 from ..core.file import File
 from ..core.symbolic_link import SymbolicLink
-from ..factory import resource_from_path
 from ..providers import FilesystemProviderProtocol, require_provider_operation
 
 
@@ -55,16 +54,12 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
          exclude: Callable[[str, bool], bool] | None = None,
          on_error: str = "raise",
          symlink_policy: str = "skip") -> ScanResult:
-    """Discover descendants. Links are never followed.
+    """Discover descendants through the configured filesystem provider.
 
-    symlink_policy="skip" (default) records and ignores links;
-    "accept" materializes links as terminal SymbolicLink resources without
-    traversing their targets; "raise" aborts when one is encountered.
-    Following descendant links is
-    deliberately unavailable because it conflicts with the provider's
-    logical-path mapping and root-confinement guarantees. A selected root
-    link can be resolved explicitly with resource_from_path(...,
-    follow_symlinks=True).
+    Physical enumeration is provider-owned: POSIX providers enumerate relative
+    to pinned directory descriptors; path-based platforms retain their
+    explicitly documented weaker race guarantees. Descendant links are never
+    followed.
     """
     if not isinstance(directory, Directory):
         raise TypeError("directory must be a Directory")
@@ -80,29 +75,33 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
         raise TypeError("excluded_names must be a set of non-empty strings")
     if exclude is not None and not callable(exclude):
         raise TypeError("exclude must be callable or None")
+
     exists = require_provider_operation(provider, "exists")
+    enumerate_entries = require_provider_operation(provider, "scan_entries")
     if not exists(directory):
         raise FileNotFoundError(f"physical directory does not exist: {directory.path()}")
     resolve = getattr(provider, "resolve", None)
     if not callable(resolve):
-        raise TypeError("provider must expose resolve(resource) for directory discovery")
-    root_path = resolve(directory, allow_missing=False)
+        raise TypeError("provider must expose resolve(resource) for diagnostics")
+
     discovered: list[Directory | File | SymbolicLink] = []
     skipped: list[tuple[str, str]] = []
-    stack: list[tuple[Directory, Path]] = [(directory, Path(root_path))]
+    stack: list[Directory] = [directory]
+
     while stack:
-        current_model, current_path = stack.pop()
+        current_model = stack.pop()
         try:
-            with os.scandir(current_path) as iterator:
-                entries = sorted(iterator, key=lambda entry: entry.name.casefold())
+            entries = enumerate_entries(current_model)
         except OSError as error:
             if on_error == "raise":
                 raise
-            skipped.append((str(current_path), str(error)))
+            skipped.append((str(current_model.path()), str(error)))
             continue
-        for entry in entries:
+
+        current_path = resolve(current_model, allow_missing=False)
+        for name, info, target in entries:
+            entry_path = str(current_path / name)
             try:
-                info = entry.stat(follow_symlinks=False)
                 attributes = getattr(info, "st_file_attributes", 0)
                 reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
                 is_symlink = stat.S_ISLNK(info.st_mode)
@@ -110,61 +109,80 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 if is_symlink or is_reparse_point:
                     reason = "symbolic link or reparse point"
                     if symlink_policy == "raise":
-                        raise _SymlinkPolicyError(f"{reason}: {entry.path}")
+                        raise _SymlinkPolicyError(f"{reason}: {entry_path}")
                     if symlink_policy == "accept" and is_symlink:
+                        if target is None:
+                            raise OSError(f"symbolic-link target unavailable: {entry_path}")
                         existing = next(
                             (child for child in current_model.children
-                             if child.name == entry.name),
+                             if child.name == name),
                             None,
                         )
-                        target = _normalize_symlink_target(os.readlink(entry.path))
+                        normalized_target = _normalize_symlink_target(target)
                         if existing is not None:
-                            if not isinstance(existing, SymbolicLink) or existing.target != target:
-                                raise TypeError(f"model/physical type conflict at {entry.path!r}")
+                            if not isinstance(existing, SymbolicLink) or existing.target != normalized_target:
+                                raise TypeError(f"model/physical type conflict at {entry_path!r}")
                         else:
                             resource = SymbolicLink(
-                                name=entry.name,
-                                target=target,
+                                name=name,
+                                target=normalized_target,
                                 parent=current_model,
                             )
                             discovered.append(resource)
                         continue
-                    skipped.append((entry.path, reason))
+                    skipped.append((entry_path, reason))
                     continue
+
                 is_directory = stat.S_ISDIR(info.st_mode)
                 is_file = stat.S_ISREG(info.st_mode)
                 if not (is_directory or is_file):
-                    skipped.append((entry.path, "unsupported filesystem entry type"))
+                    skipped.append((entry_path, "unsupported filesystem entry type"))
                     continue
-                if entry.name in excluded_names or (
-                    exclude is not None and exclude(entry.name, is_directory)
+                if name in excluded_names or (
+                    exclude is not None and exclude(name, is_directory)
                 ):
-                    skipped.append((entry.path, "excluded by scan policy"))
+                    skipped.append((entry_path, "excluded by scan policy"))
                     continue
+
                 existing = next(
                     (child for child in current_model.children
-                     if (child.name if isinstance(child, Directory) else child.filename()) == entry.name),
+                     if (child.name if isinstance(child, Directory) else child.filename()) == name),
                     None,
                 )
                 expected_type = Directory if is_directory else File
                 if existing is not None:
                     if not isinstance(existing, expected_type):
-                        raise TypeError(f"model/physical type conflict at {entry.path!r}")
+                        raise TypeError(f"model/physical type conflict at {entry_path!r}")
                     resource = existing
-                else:
-                    resource = resource_from_path(entry.path, parent=current_model)
-                    if not isinstance(resource, expected_type):
-                        raise OSError(f"filesystem entry changed during scan: {entry.path}")
+                elif is_directory:
+                    resource = Directory(name=name, parent=current_model)
                     discovered.append(resource)
+                else:
+                    suffix = Path(name).suffix
+                    if suffix == ".":
+                        resource = File(name=name, parent=current_model)
+                    else:
+                        base_name = name[:-len(suffix)] if suffix else name
+                        resource = File(
+                            name=base_name,
+                            extension=suffix[1:] or None,
+                            parent=current_model,
+                        )
+                    discovered.append(resource)
+
                 if is_directory and recursive:
-                    stack.append((resource, Path(entry.path)))
+                    stack.append(resource)
             except (OSError, ValueError, TypeError) as error:
                 if isinstance(error, _SymlinkPolicyError):
                     raise
                 if on_error == "raise":
                     raise
-                skipped.append((entry.path, str(error)))
-    return ScanResult(directory=directory, discovered=tuple(discovered), skipped=tuple(skipped))
+                skipped.append((entry_path, str(error)))
 
+    return ScanResult(
+        directory=directory,
+        discovered=tuple(discovered),
+        skipped=tuple(skipped),
+    )
 
 __all__ = ["ScanResult", "scan"]
