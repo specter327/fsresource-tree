@@ -33,7 +33,7 @@ fsresourcetree
 └── provider loader / factory
 ```
 
-The diagram describes the intended architecture. The platform-specific providers and dynamic loader are not implemented yet. The current code has one concrete `FilesystemProvider` with POSIX descriptor-relative behavior where available and a path-based Windows branch.
+The diagram reflects the current public architecture. `LinuxProvider`, `TermuxProvider` and `WindowsProvider` are registered guarded specializations selected by `ProviderLoader`. Linux and Termux share POSIX descriptor-relative behavior; Windows uses the shared path-based implementation. They are not three independently implemented backends.
 
 ### Generic core
 
@@ -69,7 +69,7 @@ A cached physical observation is not a live guarantee. It must carry observation
 
 ### Profiling and synchronization
 
-The intended `profile()` operation queries the provider and returns a point-in-time profile for a File or Directory. It may either:
+The public `profile()` operation queries the provider and returns a point-in-time profile for a File or Directory. It may either:
 
 1. Return the observation without mutating the resource model; or
 2. Explicitly update the resource's cached physical properties.
@@ -89,11 +89,11 @@ Platform differences belong behind specialized providers. The intended implement
 - `WindowsProvider`
 - `MacOSProvider` as a possible additional provider, not a current compatibility commitment.
 
-A dynamic provider loader/factory will detect the runtime platform and return the appropriate provider. If no provider is available, it must raise a clear, semantic exception; it must not silently fall back to an implementation with different safety guarantees.
+`ProviderLoader` detects the runtime platform and returns the registered provider. Unsupported runtimes raise `UnsupportedPlatformError`; the loader does not silently fall back to another platform implementation.
 
 Termux is identified as its own execution environment even where it can reuse POSIX primitives. It may have different storage permissions, mount visibility and Android-specific restrictions.
 
-The current required compatibility targets remain GNU/Linux, Termux and Windows. macOS is an extensibility target only until it is explicitly added to the supported test matrix. The current local provider reports the Termux runtime separately when the Termux environment marker is present; this environment identification does not yet constitute a dedicated Termux provider implementation.
+The current required compatibility targets remain GNU/Linux, Termux and Windows. macOS is an extensibility target only until it is explicitly added to the supported test matrix. Termux has a dedicated guarded provider class and runtime selection, while reusing the shared POSIX implementation; actual Termux runtime validation remains an outstanding release task.
 
 ### Operating system is not filesystem format
 
@@ -105,7 +105,7 @@ The provider should expose the capabilities and metadata actually available for 
 
 The public structural interface is FilesystemProviderProtocol, which requires only an immutable ProviderCapabilities declaration. Operation services validate the specific requested operation against that provider's declared capabilities and callable method; providers do not have to implement unrelated or unsupported operations. Unsupported requests raise UnsupportedOperationError. Each configured provider reports its runtime platform identifier, known filesystem format (or None when it cannot be identified reliably), race-resistance guarantee, supported operations and available metadata fields. Capabilities describe the configured implementation; they are not inferred from the operating system alone.
 
-The provider contract will own physical operations and queries, including:
+The provider contract owns physical operations and queries, including:
 
 - Resolve a resource relative to an explicitly configured physical root.
 - Check existence and classify physical entries.
@@ -124,7 +124,7 @@ On POSIX, descriptor-relative operations prevent symlink substitution, but they 
 
 Operations are explicit. Constructing a resource, attaching it to a Directory, registering it in an FSResourceTree, serializing it, or searching it must not change the physical filesystem.
 
-Physical operations require a provider. Destructive operations are never hidden side effects and must document exactly what they can change.
+Physical operations require a provider. The public API currently includes `create()`, `exists()`, `delete()`, `copy()`, `move()`, `rename()`, `profile()` and `scan()`. Destructive operations are never hidden side effects and must document exactly what they can change.
 
 | Operation | Intended effect |
 |---|---|
