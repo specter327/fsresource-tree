@@ -84,3 +84,18 @@ def test_symlink_policy_rejects_unknown_values(tmp_path):
             root.scan(symlink_policy="follow")
     finally:
         root.close_provider()
+
+def test_follow_symlinks_is_only_valid_for_selected_root(tmp_path):
+    from fsresourcetree import Directory
+
+    target = tmp_path / "target"
+    target.mkdir()
+    link = tmp_path / "alias"
+    _symlink_or_skip(link, target, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="selected root"):
+        resource_from_path(
+            link,
+            parent=Directory(name="parent"),
+            follow_symlinks=True,
+        )
