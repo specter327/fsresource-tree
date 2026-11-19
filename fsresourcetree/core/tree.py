@@ -42,7 +42,7 @@ class FSResourceTree(ResourceTree):
 
     def register(self, resource, parent: Directory | None = None) -> str:
         if not isinstance(resource, (Directory, File, SymbolicLink)):
-            raise TypeError("filesystem trees can register only Directory, File or SymbolicLink resources")
+            raise TypeError("filesystem trees can register only Directory or File resources, plus terminal SymbolicLink resources")
         if parent is not None and not isinstance(parent, Directory):
             raise TypeError("filesystem resource parent must be a Directory")
         return super().register(resource, parent)
