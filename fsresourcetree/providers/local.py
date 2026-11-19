@@ -274,9 +274,13 @@ class FilesystemProvider:
                             ):
                                 raise OSError(f"filesystem entry changed during scan: {name}")
                     elif stat.S_ISDIR(info.st_mode):
+                        # O_PATH permits identity verification without requiring
+                        # read permission on the child directory. The directory will
+                        # be opened for enumeration only if recursion actually visits it.
+                        identity_flags = getattr(os, "O_PATH", os.O_RDONLY)
                         child_fd = os.open(
                             name,
-                            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                            identity_flags | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
                             dir_fd=directory_fd,
                         )
                         try:
