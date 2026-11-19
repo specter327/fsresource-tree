@@ -18,7 +18,7 @@ def test_file_access_helpers_observe_current_process_access(tmp_path):
     root = Directory("root")
     report = File("report", extension="txt", parent=root)
 
-    with FilesystemProvider(physical, resource_root=root):
+    with FilesystemProvider(physical, resource_root=root) as provider:
         _require_access(provider)
         assert report.readable()
         assert report.writable()
@@ -46,7 +46,8 @@ def test_access_helpers_return_false_for_missing_resource(tmp_path):
     root = Directory("root")
     missing = File("missing", parent=root)
 
-    with FilesystemProvider(physical, resource_root=root):
+    with FilesystemProvider(physical, resource_root=root) as provider:
+        _require_access(provider)
         assert missing.readable() is False
         assert missing.writable() is False
         assert missing.executable() is False
@@ -88,7 +89,7 @@ def test_access_rejects_symbolic_links(tmp_path):
     root = Directory("root")
     link = File("link", parent=root)
 
-    with FilesystemProvider(physical, resource_root=root):
+    with FilesystemProvider(physical, resource_root=root) as provider:
         _require_access(provider)
         with pytest.raises(ValueError, match="symbolic links"):
             link.readable()
@@ -114,7 +115,7 @@ def test_readable_file_through_search_only_parent(tmp_path):
     search_only = Directory("search-only", parent=root)
     report = File("known", extension="txt", parent=search_only)
 
-    with FilesystemProvider(physical, resource_root=root):
+    with FilesystemProvider(physical, resource_root=root) as provider:
         _require_access(provider)
         assert report.readable() is True
         # File write access is independent of parent-directory write access.
@@ -145,7 +146,7 @@ def test_is_accessible_aliases_match_short_resource_methods(tmp_path):
     root = Directory("root")
     item = File("item", parent=root)
 
-    with FilesystemProvider(physical, resource_root=root):
+    with FilesystemProvider(physical, resource_root=root) as provider:
         _require_access(provider)
         assert item.is_readable() == item.readable()
         assert item.is_writable() == item.writable()
