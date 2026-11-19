@@ -6,15 +6,16 @@ from collections.abc import Iterator
 
 from ..core.directory import Directory
 from ..core.file import File
+from ..core.symbolic_link import SymbolicLink
 
 
-Resource = Directory | File
+Resource = Directory | File | SymbolicLink
 
 
 def walk(resource: Resource, inverse: bool = False) -> Iterator[Resource]:
     """Traverse a subtree iteratively; inverse=True yields post-order."""
-    if not isinstance(resource, (Directory, File)):
-        raise TypeError("resource must be a Directory or File")
+    if not isinstance(resource, (Directory, File, SymbolicLink)):
+        raise TypeError("resource must be a Directory, File or SymbolicLink")
     if not isinstance(inverse, bool):
         raise TypeError("inverse must be a bool")
     if resource.parent is not None:
@@ -46,8 +47,11 @@ def walk(resource: Resource, inverse: bool = False) -> Iterator[Resource]:
             children = node.children
             child_ids: set[int] = set()
             for child in children:
-                if not isinstance(child, (Directory, File)):
-                    raise TypeError("filesystem hierarchies can contain only Directory or File")
+                if not isinstance(child, (Directory, File, SymbolicLink)):
+                    raise TypeError(
+                        "filesystem hierarchies can contain only Directory, File "
+                        "or SymbolicLink resources"
+                    )
                 if id(child) in child_ids:
                     raise ValueError("duplicate child reference in filesystem hierarchy")
                 child_ids.add(id(child))
