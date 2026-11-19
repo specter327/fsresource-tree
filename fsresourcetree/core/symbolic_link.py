@@ -5,11 +5,12 @@ destination and intentionally exposes no filesystem mutation operations.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from resourcetree import Asset
 
-from .directory import Directory
+if TYPE_CHECKING:
+    from .directory import Directory
 
 
 class SymbolicLink(Asset):
@@ -28,8 +29,10 @@ class SymbolicLink(Asset):
     ) -> None:
         if not isinstance(target, str) or not target:
             raise ValueError("symbolic-link target must be a non-empty string")
-        if parent is not None and not isinstance(parent, Directory):
-            raise TypeError("a SymbolicLink parent must be a Directory")
+        if parent is not None:
+            from .directory import Directory
+            if not isinstance(parent, Directory):
+                raise TypeError("a SymbolicLink parent must be a Directory")
         super().__init__(name=name, parent=parent, uid=uid, data=data, metadata=metadata)
         self.target = target
 
