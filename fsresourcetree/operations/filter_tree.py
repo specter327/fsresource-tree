@@ -38,7 +38,7 @@ def filter_tree(directory: Directory, *, format: FormatTypes | tuple[FormatTypes
                     File(node.name, extension=node.extension, parent=parent_clone, metadata=dict(node.metadata))
     for node in list(walk(result, inverse=True)):
         if isinstance(node, Directory) and node is not result and not node.children:
-            node.detach()
+            node.parent.remove_child(node)
     return result
 
 __all__ = ["filter_tree"]
