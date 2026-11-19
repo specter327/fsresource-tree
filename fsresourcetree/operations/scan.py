@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from ..core.directory import Directory
 from ..core.file import File
+from ..core.symbolic_link import SymbolicLink
 from ..factory import resource_from_path
 from ..providers import FilesystemProviderProtocol, require_provider_operation
 
@@ -19,7 +20,7 @@ class _SymlinkPolicyError(ValueError):
 class ScanResult:
     """Immutable summary of one physical directory scan."""
     directory: Directory
-    discovered: tuple[Directory | File, ...]
+    discovered: tuple[Directory | File | SymbolicLink, ...]
     skipped: tuple[tuple[str, str], ...]
     @property
     def count(self) -> int:
@@ -34,8 +35,10 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
          symlink_policy: str = "skip") -> ScanResult:
     """Discover descendants. Links are never followed.
 
-    symlink_policy="skip" (default) records and ignores links/reparse points;
-    "raise" aborts when one is encountered. Following descendant links is
+    symlink_policy="skip" (default) records and ignores links;
+    "accept" materializes links as terminal SymbolicLink resources without
+    traversing their targets; "raise" aborts when one is encountered.
+    Following descendant links is
     deliberately unavailable because it conflicts with the provider's
     logical-path mapping and root-confinement guarantees. A selected root
     link can be resolved explicitly with resource_from_path(...,
@@ -47,8 +50,8 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
         raise TypeError("recursive must be a bool")
     if on_error not in {"raise", "skip"}:
         raise ValueError("on_error must be 'raise' or 'skip'")
-    if symlink_policy not in {"skip", "raise"}:
-        raise ValueError("symlink_policy must be 'skip' or 'raise'")
+    if symlink_policy not in {"skip", "accept", "raise"}:
+        raise ValueError("symlink_policy must be 'skip', 'accept' or 'raise'")
     if not isinstance(excluded_names, (set, frozenset)) or any(
         not isinstance(name, str) or not name for name in excluded_names
     ):
@@ -62,7 +65,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
     if not callable(resolve):
         raise TypeError("provider must expose resolve(resource) for directory discovery")
     root_path = resolve(directory, allow_missing=False)
-    discovered: list[Directory | File] = []
+    discovered: list[Directory | File | SymbolicLink] = []
     skipped: list[tuple[str, str]] = []
     stack: list[tuple[Directory, Path]] = [(directory, Path(root_path))]
     while stack:
@@ -80,10 +83,30 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 info = entry.stat(follow_symlinks=False)
                 attributes = getattr(info, "st_file_attributes", 0)
                 reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-                if stat.S_ISLNK(info.st_mode) or attributes & reparse_flag:
-                    reason = "symbolic link or reparse point"
+                is_symlink = stat.S_ISLNK(info.st_mode)
+                is_reparse_point = bool(attributes & reparse_flag)
+                if is_symlink or is_reparse_point:
+                    reason = "symbolic link" if is_symlink else "filesystem reparse point"
                     if symlink_policy == "raise":
                         raise _SymlinkPolicyError(f"{reason}: {entry.path}")
+                    if symlink_policy == "accept" and is_symlink:
+                        existing = next(
+                            (child for child in current_model.children
+                             if child.name == entry.name),
+                            None,
+                        )
+                        target = os.readlink(entry.path)
+                        if existing is not None:
+                            if not isinstance(existing, SymbolicLink) or existing.target != target:
+                                raise TypeError(f"model/physical type conflict at {entry.path!r}")
+                        else:
+                            resource = SymbolicLink(
+                                name=entry.name,
+                                target=target,
+                                parent=current_model,
+                            )
+                            discovered.append(resource)
+                        continue
                     skipped.append((entry.path, reason))
                     continue
                 is_directory = stat.S_ISDIR(info.st_mode)
