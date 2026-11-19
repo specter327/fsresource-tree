@@ -6,7 +6,7 @@ from ..core.symbolic_link import SymbolicLink
 from ..format_types import FormatTypes, extensions_for, normalize_extensions, normalize_formats
 from .walker import walk
 
-def find(resource: Directory | File | SymbolicLink, target: str | None = None, *, format: FormatTypes | tuple[FormatTypes, ...] | None = None, extensions=None):
+ _UNSET = object()\n\ndef find(resource: Directory | File | SymbolicLink, target=_UNSET, *, format: FormatTypes | tuple[FormatTypes, ...] | None = None, extensions=None):
     """Search a modeled subtree.
 
     With target, preserve the exact-name API and return the first match or None.
