@@ -15,11 +15,11 @@ This roadmap distinguishes the current implementation from the intended architec
 - [x] Define a minimal structural provider contract based on capability declarations.
 - [x] Expose immutable per-instance provider capability reporting.
 - [x] Validate each requested operation independently and raise a semantic unsupported-operation exception.
-- [ ] Extend the contract when copy/move/rename and discovery operations are implemented.
+- [x] Extend provider capabilities for copy/move/rename and discovery operations (as currently exposed by the provider implementation).
 - [x] Separate the provider interface from the current local implementation.
-- [ ] Separate platform implementations once their distinct semantics are specified.
-- [ ] Implement `LinuxProvider`, `TermuxProvider` and `WindowsProvider`.
-- [ ] Add a dynamic loader/factory that detects the runtime environment and raises an explicit unsupported-platform exception when no provider exists.
+- [x] Add explicit Linux, Termux and Windows provider classes while keeping shared behavior in the local implementation.
+- [x] Implement `LinuxProvider`, `TermuxProvider` and `WindowsProvider` as guarded specializations of the shared local backend.
+- [x] Add `ProviderLoader` with runtime detection and explicit unsupported-platform failures; integrate it into `resource_from_path()`.
 - [ ] Keep additional providers (for example, `MacOSProvider`) possible without claiming current support.
 - [ ] Model filesystem capabilities separately from operating-system identity; do not assume Linux means ext or Windows means NTFS.
 
