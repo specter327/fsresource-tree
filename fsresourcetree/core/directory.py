@@ -50,6 +50,13 @@ class Directory(FilesystemResourceOperations, Container):
         from ..operations.walker import walk
         return walk(self, order=order)
 
+    def ancestors(self, *, include_self: bool = False, order: str = "up"):
+        """Iterate parent directories from the immediate parent toward the root."""
+        if order not in {"up", "down"}:
+            raise ValueError("order must be 'up' or 'down'")
+        from ..operations.ancestors import ancestors
+        return ancestors(self, include_self=include_self, inverse=(order == "up"))
+
     def profile(self, *, update_cache: bool = False):
         from ..operations.profile import profile
         return profile(self, provider=self._require_provider(), update_cache=update_cache)
