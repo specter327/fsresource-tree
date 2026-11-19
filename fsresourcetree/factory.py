@@ -53,6 +53,8 @@ def resource_from_path(path: str | os.PathLike[str], *,
     """
     if not isinstance(follow_symlinks, bool):
         raise TypeError("follow_symlinks must be a bool")
+    if follow_symlinks and parent is not None:
+        raise ValueError("follow_symlinks is only supported for an explicitly selected root resource")
     candidate = Path(path).expanduser()
     if candidate.name == "..":
         raise ValueError("paths ending in '..' cannot be materialized as filesystem resources")
