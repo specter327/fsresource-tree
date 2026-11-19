@@ -8,13 +8,14 @@ from resourcetree import ResourceTree
 
 from .directory import Directory
 from .file import File
+from .symbolic_link import SymbolicLink
 
 
 class FSResourceTree(ResourceTree):
     """ResourceTree whose roots and descendants are filesystem resources.
 
     A filesystem forest consists of one or more Directory roots. Its hierarchy
-    may contain only Directory and File instances.
+    may contain Directory, File and SymbolicLink instances.
     """
 
     def __init__(
@@ -27,9 +28,9 @@ class FSResourceTree(ResourceTree):
         super().__init__(roots=roots, name=name, uid=uid)
 
     def _validate_node(self, resource) -> None:
-        if not isinstance(resource, (Directory, File)):
+        if not isinstance(resource, (Directory, File, SymbolicLink)):
             raise TypeError(
-                "filesystem trees can contain only Directory or File resources"
+                "filesystem trees can contain only Directory, File or SymbolicLink resources"
             )
 
     def add_roots(self, resources: Iterable[Directory]) -> tuple[Directory, ...]:
