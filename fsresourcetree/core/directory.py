@@ -32,7 +32,7 @@ class Directory(FilesystemResourceOperations, Container):
     def _validate_attachment(self, resource) -> None:
         from .file import File
         if not isinstance(resource, (Directory, File, SymbolicLink)):
-            raise TypeError("a Directory can contain only Directory, File or SymbolicLink resources")
+            raise TypeError("a Directory can contain only Directory or File resources, plus terminal SymbolicLink resources")
         super()._validate_attachment(resource)
 
     @classmethod
