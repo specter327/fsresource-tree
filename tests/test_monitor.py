@@ -187,3 +187,199 @@ def test_monitor_dispatches_from_background_worker(tmp_path):
     finally:
         root.disable_monitor(timeout=3)
         provider.close()
+
+
+@pytest.mark.parametrize("initial_kind", ["file", "directory"])
+def test_monitor_recovers_from_physical_type_replacement(tmp_path, initial_kind):
+    physical, root, provider = make_root(tmp_path)
+    entry = physical / "changing"
+    if initial_kind == "file":
+        entry.touch()
+    else:
+        entry.mkdir()
+        (entry / "nested.txt").touch()
+    unrelated = physical / "unrelated.txt"
+
+    events = []
+    root.add_listener(events.append)
+    try:
+        monitor = root.enable_monitor(interval=60)
+        old_resource = root.find("changing")
+        assert isinstance(old_resource, File if initial_kind == "file" else Directory)
+
+        if initial_kind == "file":
+            entry.unlink()
+            entry.mkdir()
+        else:
+            (entry / "nested.txt").unlink()
+            entry.rmdir()
+            entry.touch()
+        unrelated.touch()
+
+        detected = monitor._poll_once()
+        replacement = root.find("changing")
+        assert isinstance(replacement, Directory if initial_kind == "file" else File)
+        assert any(
+            event.change_type is FilesystemChangeType.DELETED
+            and event.resource is old_resource
+            for event in detected
+        )
+        assert any(
+            event.change_type is FilesystemChangeType.CREATED
+            and event.resource is replacement
+            for event in detected
+        )
+        assert any(
+            event.change_type is FilesystemChangeType.CREATED
+            and event.resource.name == "unrelated"
+            for event in detected
+        )
+        # A subsequent poll must remain healthy after the replacement.
+        (physical / "later.txt").touch()
+        later = monitor._poll_once()
+        assert any(
+            event.change_type is FilesystemChangeType.CREATED
+            and event.resource.name == "later"
+            for event in later
+        )
+    finally:
+        root.disable_monitor()
+        provider.close()
+
+
+def test_monitor_detects_library_rename_with_stable_uid(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    item_path = physical / "before.txt"
+    item_path.touch()
+    root.scan()
+    item = root.find("before")
+    assert isinstance(item, File)
+    events = []
+    root.add_listener(events.append)
+
+    try:
+        monitor = root.enable_monitor(interval=60)
+        original_uid = item.uid
+        item.rename("after")
+        detected = monitor._poll_once()
+
+        moved = next(
+            event for event in detected
+            if event.change_type is FilesystemChangeType.MOVED
+            and event.resource is item
+        )
+        assert item.uid == original_uid
+        assert moved.previous_path == "/root/before.txt"
+        assert moved.current_path == "/root/after.txt"
+        assert moved.previous is not None and moved.current is not None
+    finally:
+        root.disable_monitor()
+        provider.close()
+
+
+def test_monitor_detects_library_move_with_stable_uid(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    source = physical / "source"
+    destination = physical / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "item.txt").touch()
+    root.scan()
+    source_model = root.find("source")
+    destination_model = root.find("destination")
+    assert isinstance(source_model, Directory)
+    assert isinstance(destination_model, Directory)
+    item = source_model.find("item")
+    assert isinstance(item, File)
+
+    try:
+        monitor = root.enable_monitor(interval=60)
+        original_uid = item.uid
+        item.move(destination_model)
+        detected = monitor._poll_once()
+        moved = next(
+            event for event in detected
+            if event.change_type is FilesystemChangeType.MOVED
+            and event.resource is item
+        )
+        assert item.uid == original_uid
+        assert moved.previous_path == "/root/source/item.txt"
+        assert moved.current_path == "/root/destination/item.txt"
+    finally:
+        root.disable_monitor()
+        provider.close()
+
+
+def test_monitor_does_not_publish_partial_snapshot_after_scan_error(tmp_path, monkeypatch):
+    physical, root, provider = make_root(tmp_path)
+    from types import SimpleNamespace
+    from fsresourcetree import PollingMonitor
+
+    try:
+        monitor = PollingMonitor(root, interval=60)
+        baseline = monitor._collect_snapshot()
+        monitor._snapshot = baseline
+        original_scan = root.scan
+
+        def partial_scan(**kwargs):
+            result = original_scan(**kwargs)
+            return SimpleNamespace(
+                directory=result.directory,
+                skipped=result.skipped + (
+                    (str(physical / "inaccessible"), "Permission denied"),
+                ),
+            )
+
+        monkeypatch.setattr(root, "scan", partial_scan)
+        with pytest.raises(OSError, match="Permission denied"):
+            monitor._poll_once()
+        assert monitor._snapshot is baseline
+    finally:
+        provider.close()
+
+
+
+def test_type_replacement_stops_monitors_in_replaced_directory_subtree(tmp_path):
+    physical, root, provider = make_root(tmp_path)
+    changing = physical / "changing"
+    nested_path = changing / "nested"
+    nested_path.mkdir(parents=True)
+    (nested_path / "item.txt").touch()
+    root.scan()
+    stale = root.find("changing")
+    assert isinstance(stale, Directory)
+    nested = stale.find("nested")
+    assert isinstance(nested, Directory)
+
+    try:
+        root_monitor = root.enable_monitor(interval=60)
+        stale_monitor = stale.enable_monitor(interval=60)
+        nested_monitor = nested.enable_monitor(interval=60)
+        assert root_monitor.enabled
+        assert stale_monitor.enabled
+        assert nested_monitor.enabled
+
+        # Replace the monitored directory subtree with a file.
+        (nested_path / "item.txt").unlink()
+        nested_path.rmdir()
+        changing.rmdir()
+        changing.touch()
+
+        events = root_monitor._poll_once()
+        replacement = root.find("changing")
+        assert isinstance(replacement, File)
+        assert any(
+            event.change_type is FilesystemChangeType.DELETED
+            and event.resource is stale
+            for event in events
+        )
+        assert not stale_monitor.running
+        assert not nested_monitor.running
+        assert stale not in root.children
+        assert provider._active_monitors == {root_monitor}
+    finally:
+        root.disable_monitor()
+        # These calls remain safe after automatic subtree shutdown.
+        stale.disable_monitor()
+        nested.disable_monitor()
+        provider.close()

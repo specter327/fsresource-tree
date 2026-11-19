@@ -10,6 +10,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Callable
 
 from ..core.directory import Directory
@@ -25,17 +26,25 @@ class FilesystemChangeType(str, Enum):
     CREATED = "created"
     DELETED = "deleted"
     MODIFIED = "modified"
+    MOVED = "moved"
 
 
 @dataclass(frozen=True, slots=True)
 class FilesystemChangeEvent:
-    """One detected change to a modeled filesystem resource."""
+    """One detected change to a modeled filesystem resource.
+
+    ``previous_path`` and ``current_path`` preserve the logical location on
+    each side of a move; they are also populated for other event types when
+    that side of the observation exists.
+    """
 
     change_type: FilesystemChangeType
     resource: Directory | File
     previous: PhysicalProfile | None
     current: PhysicalProfile | None
     detected_at: datetime
+    previous_path: str | None = None
+    current_path: str | None = None
 
     @property
     def resource_uid(self) -> str:
@@ -61,6 +70,16 @@ def _profile_state(profile: PhysicalProfile) -> tuple:
         profile.link_count,
         profile.native_attributes,
     )
+
+
+def _resource_path(resource: Directory | File) -> str:
+    """Return the logical hierarchy path using physical File basenames."""
+    segments: list[str] = []
+    current: Directory | File | None = resource
+    while current is not None:
+        segments.append(current.filename() if isinstance(current, File) else current.name)
+        current = current.parent
+    return "/" + "/".join(reversed(segments))
 
 
 def _walk(directory: Directory, *, recursive: bool) -> tuple[Directory | File, ...]:
@@ -109,7 +128,7 @@ class PollingMonitor:
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._snapshot: dict[str, tuple[Directory | File, PhysicalProfile]] = {}
+        self._snapshot: dict[str, tuple[Directory | File, PhysicalProfile, str]] = {}
 
     @property
     def enabled(self) -> bool:
@@ -185,14 +204,91 @@ class PollingMonitor:
                 with registry_lock:
                     registry.discard(self)
 
-    def _collect_snapshot(self) -> dict[str, tuple[Directory | File, PhysicalProfile]]:
+    def _remove_type_conflicts(self, skipped: tuple[tuple[str, str], ...]) -> bool:
+        """Detach stale model nodes whose physical entry changed resource type.
+
+        The next scan pass materializes the replacement using the correct
+        resource class. Detaching through the parent keeps ResourceTree indexes
+        consistent and also retires any stale descendants of a replaced
+        Directory.
+        """
+        root_path = self.provider.resolve(self.directory, allow_missing=False)
+        conflicts = [
+            Path(path) for path, reason in skipped
+            if reason.startswith("model/physical type conflict")
+        ]
+        changed = False
+        for physical_path in sorted(conflicts, key=lambda item: len(item.parts)):
+            try:
+                relative = physical_path.relative_to(root_path)
+            except ValueError:
+                continue
+            if not relative.parts:
+                continue
+            parent = self.directory
+            for segment in relative.parts[:-1]:
+                child = next(
+                    (
+                        item for item in parent.children
+                        if (item.filename() if isinstance(item, File) else item.name) == segment
+                    ),
+                    None,
+                )
+                if not isinstance(child, Directory):
+                    parent = None
+                    break
+                parent = child
+            if parent is None:
+                continue
+            stale = next(
+                (
+                    item for item in parent.children
+                    if (item.filename() if isinstance(item, File) else item.name) == relative.name
+                ),
+                None,
+            )
+            if stale is not None:
+                # A replaced directory may own monitors itself or contain
+                # independently monitored descendants. Stop every worker
+                # before detaching the subtree: detached resources can no
+                # longer resolve the provider, and orphaned workers would
+                # keep the provider's active-monitor registry occupied.
+                if isinstance(stale, Directory):
+                    for descendant in reversed(_walk(stale, recursive=True)):
+                        if isinstance(descendant, Directory):
+                            descendant.disable_monitor()
+                parent.remove_child(stale)
+                changed = True
+        return changed
+
+    def _collect_snapshot(self) -> dict[str, tuple[Directory | File, PhysicalProfile, str]]:
         root_profile = self.directory.profile()
         if root_profile.exists:
-            self.directory.scan(recursive=self.recursive, on_error="raise")
-        snapshot: dict[str, tuple[Directory | File, PhysicalProfile]] = {}
+            result = self.directory.scan(
+                recursive=self.recursive, on_error="skip"
+            )
+            recoverable_skips = {
+                "symbolic link or reparse point",
+                "unsupported filesystem entry type",
+            }
+            type_conflicts = []
+            for path, reason in result.skipped:
+                if reason.startswith("model/physical type conflict"):
+                    type_conflicts.append((path, reason))
+                elif reason not in recoverable_skips and reason != "excluded by scan policy":
+                    # A partial snapshot after an I/O/race error could make
+                    # resources look deleted. Preserve the previous snapshot
+                    # instead of dispatching false deletion events.
+                    raise OSError(f"filesystem scan failed at {path!r}: {reason}")
+            if self._remove_type_conflicts(tuple(type_conflicts)):
+                # Re-scan after removing stale model objects. This discovers
+                # replacement entries and prevents one conflict from
+                # permanently blocking unrelated changes.
+                self.directory.scan(recursive=self.recursive, on_error="raise")
+        snapshot: dict[str, tuple[Directory | File, PhysicalProfile, str]] = {}
         for resource in _walk(self.directory, recursive=self.recursive):
             observation = root_profile if resource is self.directory else resource.profile()
-            snapshot[resource.uid] = (resource, observation)
+            snapshot[resource.uid] = (resource, observation, _resource_path(resource))
         return snapshot
 
     def _dispatch(self, event: FilesystemChangeEvent) -> None:
@@ -217,6 +313,8 @@ class PollingMonitor:
             current_item = current_snapshot.get(uid)
             previous = previous_item[1] if previous_item else None
             current = current_item[1] if current_item else None
+            previous_path = previous_item[2] if previous_item else None
+            current_path = current_item[2] if current_item else None
             resource = (current_item or previous_item)[0]
 
             if previous is None:
@@ -233,6 +331,8 @@ class PollingMonitor:
                 change = FilesystemChangeType.CREATED
             elif previous.exists and not current.exists:
                 change = FilesystemChangeType.DELETED
+            elif previous.exists and current.exists and previous_path != current_path:
+                change = FilesystemChangeType.MOVED
             elif (
                 previous.exists
                 and current.exists
@@ -243,11 +343,19 @@ class PollingMonitor:
                 continue
 
             events.append(
-                FilesystemChangeEvent(change, resource, previous, current, detected_at)
+                FilesystemChangeEvent(
+                    change, resource, previous, current, detected_at,
+                    previous_path=previous_path, current_path=current_path,
+                )
             )
 
         self._snapshot = current_snapshot
-        events.sort(key=lambda event: (event.resource.path(), event.change_type.value))
+        events.sort(
+            key=lambda event: (
+                event.current_path or event.previous_path or _resource_path(event.resource),
+                event.change_type.value,
+            )
+        )
         for event in events:
             self._dispatch(event)
         return tuple(events)
