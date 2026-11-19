@@ -30,9 +30,6 @@ def validate_path(
     except FileNotFoundError:
         raise FileNotFoundError(candidate) from None
 
-    # Windows symbolic links are also reparse points. Classify them first so
-    # callers receive the specific symbolic-link error; other reparse points
-    # (for example junctions) remain rejected by the broader check below.
     if stat.S_ISLNK(info.st_mode):
         raise ValueError(f"symbolic links are not filesystem resources: {candidate}")
 
@@ -65,17 +62,14 @@ def resource_from_path(
 ) -> File | Directory:
     """Materialize an existing path as its matching filesystem resource.
 
-    The returned model contains no physical path. The path is used only to
-    inspect the entry type and derive its logical name.
+    A top-level Directory automatically receives the provider selected for
+    the current runtime by ProviderLoader. Descendants inherit that binding.
     """
     candidate = Path(path).expanduser()
     if candidate.name == "..":
         raise ValueError("paths ending in '..' cannot be materialized as filesystem resources")
     resource_type = validate_path(candidate)
     if not candidate.name:
-        # Path('.') and Path() identify the current directory but have no
-        # lexical basename. Resolve only this unnamed form, after lstat-based
-        # classification, so ordinary named paths retain their supplied name.
         candidate = candidate.resolve(strict=True)
     if not candidate.name:
         raise ValueError("filesystem roots without a name cannot be materialized as resources")
@@ -86,15 +80,11 @@ def resource_from_path(
     if resource_type is Directory:
         resource = Directory(name=candidate.name, parent=parent)
         if parent is None:
-            # A top-level materialized Directory is a physical mount point.
-            # Its provider is retained by the root and inherited by descendants.
-            from .providers import FilesystemProvider
-            FilesystemProvider(candidate, resource_root=resource)
+            from .providers import ProviderLoader
+            ProviderLoader.load(candidate, resource_root=resource)
         return resource
 
     suffix = candidate.suffix
-    # pathlib treats a trailing dot as a suffix of ".". File.filename() cannot
-    # represent that as an extension, so retain the complete basename instead.
     if suffix == ".":
         return File(name=candidate.name, parent=parent)
     name = candidate.name[:-len(suffix)] if suffix else candidate.name
