@@ -32,7 +32,12 @@ def print_tree(directory: Directory, *, prefix: str = "") -> tuple[int, int]:
     for index, resource in enumerate(children):
         is_last = index == len(children) - 1
         connector = "└── " if is_last else "├── "
-        label = resource.name if isinstance(resource, Directory) else resource.filename()\n        print(f"{prefix}{connector}{label}")
+        label = (
+            resource.name
+            if isinstance(resource, Directory)
+            else resource.filename()
+        )
+        print(f"{prefix}{connector}{label}")
 
         if isinstance(resource, Directory):
             child_directories, child_files = print_tree(
