@@ -1,63 +1,81 @@
 # Roadmap
 
-This roadmap distinguishes the current implementation from the intended architecture. Work proceeds incrementally; do not introduce the entire target API in one release.
+This roadmap records the implementation that exists in the repository and separates it from remaining validation or extension work. A checked item means the capability is implemented; it does not imply that every platform has identical guarantees.
 
-## Phase 1 — Stabilize the current foundation
+## Phase 1 — Stabilize the foundation
 
-- [ ] Complete the audit of filesystem operations against the strict no-file-content-I/O boundary.
-- [ ] Keep model-only operations free of implicit filesystem access.
-- [ ] Strengthen semantic exceptions and preflight guarantees for existing create/delete/purge operations.
-- [ ] Keep GNU/Linux, Termux and Windows behavior covered by tests.
-- [ ] Complete and integrate the current stacked PR chain only after review and CI are green.
+- [x] Keep model-only construction, hierarchy management, traversal, search and serialization independent of implicit filesystem mutations.
+- [x] Keep physical file-content read/write/append/overwrite/stream/hash APIs outside the package boundary.
+- [x] Keep opaque provider-level filesystem copy as an explicit management operation that does not expose transferred bytes.
+- [ ] Complete the security review of destructive operations, race-sensitive behavior and partial-failure cleanup.
+- [ ] Validate GNU/Linux and Windows through the automated matrix, and validate Termux on a real Android/Termux runtime.
+- [ ] Document any platform-specific guarantee that cannot be tested in CI.
 
 ## Phase 2 — Provider contract and platform selection
 
-- [x] Define a minimal structural provider contract based on capability declarations.
-- [x] Expose immutable per-instance provider capability reporting.
-- [x] Validate each requested operation independently and raise a semantic unsupported-operation exception.
-- [x] Extend provider capabilities for copy/move/rename and discovery operations (as currently exposed by the provider implementation).
-- [x] Separate the provider interface from the current local implementation.
-- [x] Add explicit Linux, Termux and Windows provider classes while keeping shared behavior in the local implementation.
-- [x] Implement `LinuxProvider`, `TermuxProvider` and `WindowsProvider` as guarded specializations of the shared local backend.
-- [x] Add `ProviderLoader` with runtime detection and explicit unsupported-platform failures; integrate it into `resource_from_path()`.
-- [ ] Keep additional providers (for example, `MacOSProvider`) possible without claiming current support.
-- [ ] Model filesystem capabilities separately from operating-system identity; do not assume Linux means ext or Windows means NTFS.
+- [x] Define the structural `FilesystemProviderProtocol` and immutable `ProviderCapabilities`.
+- [x] Validate each requested operation against declared capabilities and the provider's callable method.
+- [x] Implement guarded `LinuxProvider`, `TermuxProvider` and `WindowsProvider` specializations.
+- [x] Implement `ProviderLoader` runtime detection and integrate it with `resource_from_path()`.
+- [x] Keep operating-system identity separate from filesystem-format identification.
+- [ ] Add an independent platform backend only when a concrete semantic or native-API difference justifies it.
+- [ ] Add macOS only after an explicit support decision and platform test coverage.
 
-## Phase 3 — Physical metadata and profiles
+The Linux and Termux classes currently share POSIX descriptor-relative behavior. Windows uses the shared path-based implementation. These are guarded runtime specializations, not three independently implemented backends.
 
-- [x] Define immutable File/Directory profile snapshots with observation timestamps.
-- [x] Implement provider-backed `profile()` using metadata APIs only.
-- [x] Make cache refresh/model synchronization explicit.
-- [x] Distinguish absent observations from query failures; preserve permission and I/O errors.
-- [ ] Add common metadata fields where available while retaining native/provider-specific details.
-- [ ] Implement effective access checks (`is_readable()`, `is_writable()`, `is_executable()`) against an explicit or documented security identity.
+## Phase 3 — Physical metadata and access observations
+
+- [x] Define immutable `PhysicalProfile` snapshots with UTC observation timestamps.
+- [x] Implement provider-backed metadata profiling without reading file contents.
+- [x] Make cache updates explicit through `update_cache=True`.
+- [x] Distinguish an absent entry from permission and I/O failures.
+- [x] Implement `readable()`, `writable()` and `executable()` plus resource methods and aliases.
+- [ ] Extend common metadata only where the provider can report it accurately; preserve native details rather than fabricating portability.
+
+Access checks describe the current process identity and are advisory point-in-time observations. They are not authorization guarantees for later operations.
 
 ## Phase 4 — Explicit filesystem management
 
-- [ ] Implement `copy()`, `move()` and `rename()` through providers.
-- [ ] Define precise virtual-model reconciliation behavior for each physical operation.
-- [ ] Keep destructive operations explicit and document scope, preconditions, partial-failure behavior and irreversible effects.
-- [ ] Keep modeled recursive deletion separate from explicit purge of unknown physical descendants.
-- [ ] Add semantic exceptions for unsupported operations, conflicts, permissions and unsafe paths.
+- [x] Implement provider-backed `create()`, `exists()` and `delete()`.
+- [x] Implement `copy()`, `move()` and `rename()`.
+- [x] Preserve resource UIDs for move/rename and allocate fresh identities for copies.
+- [x] Keep modeled recursive deletion separate from explicit `purge()` of unmodeled physical descendants.
+- [x] Expose instance-level operations on `File` and `Directory`, with provider resolution from the bound root.
+- [ ] Finish the cross-platform security and partial-failure audit; do not imply transactional behavior where it is not provided.
+
+Directory copy reproduces the modeled subtree only. Call `scan()` first when all physical descendants must be represented in the model. Cross-volume moves are not emulated.
 
 ## Phase 5 — Discovery and model operations
 
-- [ ] Implement physical directory enumeration and recursive scan/materialization with explicit exclusions and error policy.
-- [ ] Define reconciliation when physical entries and virtual resources differ.
-- [ ] Keep traversal, search, filtering, grouping and analysis over materialized resource collections and the FSResourceTree index.
-- [ ] Avoid making every high-level operation perform a fresh recursive filesystem walk.
+- [x] Implement public physical directory discovery through `scan()` and `Directory.scan()`.
+- [x] Support recursive or shallow scans, name/callback exclusions and configurable error handling.
+- [x] Skip symbolic links, reparse points and unsupported special entries.
+- [x] Reuse matching resources and add newly discovered entries without silently pruning stale model children.
+- [x] Keep traversal, search and logical path operations in-memory.
+- [ ] Consider an explicit reconciliation/pruning operation only with separately documented destructive semantics.
 
 ## Phase 6 — Monitoring
 
-- [ ] Implement opt-in per-resource polling and change listeners.
-- [ ] Make interval, stop behavior, callbacks and event payloads explicit.
-- [ ] Warn that polling can consume substantial CPU, I/O and battery; recommend it only for a small number of critical resources, never whole trees or large collections.
-- [ ] Add native notification backends only where provider capabilities support them.
+- [x] Implement opt-in directory-scoped metadata polling.
+- [x] Implement listener registration/removal and immutable `CREATED`, `DELETED`, `MODIFIED` and `MOVED` events.
+- [x] Make monitor lifecycle explicit and prevent provider closure while dependent monitors are active.
+- [x] Reconcile modeled rename/move and physical file/directory type replacement cases.
+- [x] Document polling cost, best-effort semantics and changes that cannot be detected from metadata.
+- [ ] Add native OS notification backends only when provider capabilities and maintenance cost justify them.
+
+## Phase 7 — Release engineering and completion
+
+- [ ] Keep the version source, package metadata, release script and distribution verification in agreement.
+- [ ] Build and inspect both wheel and sdist before creating a Git release tag.
+- [ ] Verify each built artifact in an isolated environment against the supported generic-core dependency.
+- [ ] Confirm the full CI matrix and end-to-end demonstration pass for the release candidate.
+- [ ] Publish a tagged release only after the checks above succeed.
 
 ## Non-negotiable constraints
 
-- Never expose direct file-content read/write/append/overwrite/stream/hash APIs. Opaque filesystem-level copy remains an explicitly permitted management operation; OS-internal byte transfer does not turn it into a caller-facing content API.
-- Never hide destructive physical mutations behind model construction, serialization, traversal or search.
+- Never expose direct file-content read/write/append/overwrite/stream/hash APIs.
+- Never hide physical mutations behind construction, serialization, traversal or search.
 - Never silently substitute an unsupported provider or capability.
-- Never represent cached metadata as a guaranteed live view of the filesystem.
+- Never represent cached metadata as a guaranteed live filesystem view.
+- Never claim a stronger security or race-resistance guarantee than the selected provider actually provides.
 - Never force platform/filesystem-specific behavior into a false uniform abstraction.
