@@ -164,3 +164,16 @@ def test_symbolic_link_resource_round_trips_through_model(tmp_path):
         assert links[0].target == str(target)
     finally:
         root.close_provider()
+
+def test_windows_symlink_target_normalization():
+    from fsresourcetree.operations.scan import _normalize_symlink_target
+
+    assert _normalize_symlink_target(
+        r"\\?\C:\folder\target", windows=True
+    ) == r"C:\folder\target"
+    assert _normalize_symlink_target(
+        r"\\?\UNC\server\share\target", windows=True
+    ) == r"\\server\share\target"
+    device_path = r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\target"
+    assert _normalize_symlink_target(device_path, windows=True) == device_path
+    assert _normalize_symlink_target(r"\\?\C:\folder\target", windows=False) == r"\\?\C:\folder\target"
