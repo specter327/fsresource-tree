@@ -145,6 +145,64 @@ def test_scan_accepts_symbolic_links_without_traversing_targets(tmp_path):
         root.close_provider()
 
 
+
+def test_scan_can_rescan_accepted_symlink_with_regular_sibling(tmp_path):
+    from fsresourcetree import SymbolicLink
+
+    target = tmp_path / "target"
+    target.mkdir()
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    _symlink_or_skip(root_path / "alias", target, target_is_directory=True)
+    (root_path / "item.txt").write_text("content")
+
+    root = resource_from_path(root_path)
+    try:
+        first = root.scan(symlink_policy="accept")
+        assert first.count == 2
+
+        second = root.scan(symlink_policy="accept")
+        assert second.count == 0
+        assert sum(isinstance(child, SymbolicLink) for child in root.children) == 1
+        assert sum(getattr(child, "filename", lambda: None)() == "item.txt"
+                   for child in root.children) == 1
+    finally:
+        root.close_provider()
+
+
+def test_scan_identity_check_does_not_require_child_read_permission(tmp_path, monkeypatch):
+    import os
+
+    if not hasattr(os, "O_PATH"):
+        pytest.skip("O_PATH is unavailable on this platform")
+
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    (root_path / "locked").mkdir()
+    (root_path / "visible.txt").write_text("content")
+
+    root = resource_from_path(root_path)
+    original_open = os.open
+    checked = []
+
+    def guarded_open(path, flags, *args, **kwargs):
+        if path == "locked" and kwargs.get("dir_fd") is not None:
+            checked.append(flags)
+            if flags & os.O_PATH:
+                return original_open(path, flags, *args, **kwargs)
+            raise PermissionError("read access deliberately denied")
+        return original_open(path, flags, *args, **kwargs)
+
+    try:
+        monkeypatch.setattr(os, "open", guarded_open)
+        result = root.scan(recursive=False, on_error="raise")
+        assert any(flags & os.O_PATH for flags in checked)
+        assert result.count == 2
+        assert {child.name if isinstance(child, Directory) else child.filename()
+                for child in root.children} == {"locked", "visible.txt"}
+    finally:
+        root.close_provider()
+
 def test_symbolic_link_resource_round_trips_through_model(tmp_path):
     from fsresourcetree import SymbolicLink
 
