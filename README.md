@@ -211,7 +211,7 @@ from resourcetree import Asset, Container, Resource, ResourceTree
 pip install fsresource-tree
 ```
 
-Packages are published manually by the maintainer; this repository does not publish to PyPI automatically.
+Packages are published manually by the maintainer; this repository does not publish to PyPI automatically. The repository includes a complete, isolated end-to-end demonstration of the public API; run it from the repository root with:\n\n```bash\npython examples/complete_demo.py\n```\n\nThe demonstration creates its fixtures inside a temporary directory, exercises public scanning, model indexing, metadata, copy/move/rename, serialization, rendering and monitor lifecycle, then removes the temporary filesystem.
 
 
 ## Provider security limitations
