@@ -33,6 +33,7 @@ def _normalize_symlink_target(target: str, *, windows: bool | None = None) -> st
         return target[4:]
     return target
 
+
 class _SymlinkPolicyError(ValueError):
     """Raised when the configured symlink policy rejects an entry."""
 
@@ -43,9 +44,25 @@ class ScanResult:
     directory: Directory
     discovered: tuple[Directory | File | SymbolicLink, ...]
     skipped: tuple[tuple[str, str], ...]
+
     @property
     def count(self) -> int:
         return len(self.discovered)
+
+
+def _existing_child(directory: Directory, name: str):
+    """Find a modeled child using its physical filename representation."""
+    return next(
+        (
+            child for child in directory.children
+            if (
+                child.name
+                if isinstance(child, (Directory, SymbolicLink))
+                else child.filename()
+            ) == name
+        ),
+        None,
+    )
 
 
 def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
@@ -111,13 +128,14 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                     if symlink_policy == "raise":
                         raise _SymlinkPolicyError(f"{reason}: {entry_path}")
                     if symlink_policy == "accept" and is_symlink:
+                        if name in excluded_names or (
+                            exclude is not None and exclude(name, False)
+                        ):
+                            skipped.append((entry_path, "excluded by scan policy"))
+                            continue
                         if target is None:
                             raise OSError(f"symbolic-link target unavailable: {entry_path}")
-                        existing = next(
-                            (child for child in current_model.children
-                             if child.name == name),
-                            None,
-                        )
+                        existing = _existing_child(current_model, name)
                         normalized_target = _normalize_symlink_target(target)
                         if existing is not None:
                             if not isinstance(existing, SymbolicLink) or existing.target != normalized_target:
@@ -144,11 +162,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                     skipped.append((entry_path, "excluded by scan policy"))
                     continue
 
-                existing = next(
-                    (child for child in current_model.children
-                     if (child.name if isinstance(child, (Directory, SymbolicLink)) else child.filename()) == name),
-                    None,
-                )
+                existing = _existing_child(current_model, name)
                 expected_type = Directory if is_directory else File
                 if existing is not None:
                     if not isinstance(existing, expected_type):
@@ -184,5 +198,6 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
         discovered=tuple(discovered),
         skipped=tuple(skipped),
     )
+
 
 __all__ = ["ScanResult", "scan"]
