@@ -85,7 +85,10 @@ def main() -> None:
             assert exists(summary, provider=provider)
             print(f"  provider capabilities: {provider.capabilities}")
             print(f"  physical profile: {snapshot.to_dict()}")
-            print(f"  readable by current process: {summary.readable()}")
+            if "access" in provider.capabilities.operations:
+                print(f"  readable by current process: {summary.readable()}")
+            else:
+                print("  effective access checks: unsupported by this runtime; safely omitted")
 
             print("\n[6/10] Create a destination and exercise copy / rename / move")
             archive = Directory("archive", parent=root)
