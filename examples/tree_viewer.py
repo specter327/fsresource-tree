@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fsresourcetree import Directory, File, resource_from_path
+from fsresourcetree import Directory, File, SymbolicLink, resource_from_path
 
 
 def print_tree(directory: Directory, *, prefix: str = "") -> tuple[int, int]:
@@ -29,7 +29,12 @@ def print_tree(directory: Directory, *, prefix: str = "") -> tuple[int, int]:
     for index, resource in enumerate(children):
         is_last = index == len(children) - 1
         connector = "└── " if is_last else "├── "
-        label = resource.name if isinstance(resource, Directory) else resource.filename()
+        if isinstance(resource, Directory):
+            label = resource.name
+        elif isinstance(resource, File):
+            label = resource.filename()
+        else:
+            label = f"{resource.name} -> {resource.target}"
         print(f"{prefix}{connector}{label}")
         if isinstance(resource, Directory):
             child_directories, child_files = print_tree(
