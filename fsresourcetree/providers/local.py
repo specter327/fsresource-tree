@@ -110,12 +110,29 @@ class FilesystemProvider:
             metadata_fields.add("native_attributes")
         if hasattr(os.stat_result, "st_file_attributes"):
             metadata_fields.add("native_attributes")
+        operations = {
+            "create", "exists", "delete", "delete_tree", "purge",
+            "profile", "move", "copy_file", "create_exclusive",
+        }
+        if self._supports_access_checks:
+            operations.add("access")
         return ProviderCapabilities(
             platform=self._platform,
             filesystem=None,
             race_resistant=self.race_resistant,
-            operations=frozenset({"create", "exists", "delete", "delete_tree", "purge", "profile", "access", "move", "copy_file", "create_exclusive"}),
+            operations=frozenset(operations),
             metadata_fields=frozenset(metadata_fields),
+        )
+
+    @property
+    def _supports_access_checks(self) -> bool:
+        """Whether access checks can preserve this provider's confinement model."""
+        if not self.race_resistant:
+            # The Windows/path-based implementation already uses path checks.
+            return True
+        return (
+            os.access in os.supports_dir_fd
+            and os.access in os.supports_follow_symlinks
         )
 
     def close(self) -> None:
