@@ -1,8 +1,4 @@
-"""Physical directory discovery and model materialization.
-
-Scanning observes filesystem entry metadata only. It never opens or reads file
-contents. The provider remains responsible for the configured root boundary.
-"""
+"""Physical directory discovery and model materialization."""
 from __future__ import annotations
 import os
 import stat
@@ -14,6 +10,7 @@ from ..core.file import File
 from ..factory import resource_from_path
 from ..providers import FilesystemProviderProtocol, require_provider_operation
 
+
 @dataclass(frozen=True, slots=True)
 class ScanResult:
     """Immutable summary of one physical directory scan."""
@@ -24,17 +21,21 @@ class ScanResult:
     def count(self) -> int:
         return len(self.discovered)
 
+
 def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
          recursive: bool = True,
          excluded_names: set[str] | frozenset[str] = frozenset(),
          exclude: Callable[[str, bool], bool] | None = None,
-         on_error: str = "raise") -> ScanResult:
-    """Discover physical descendants and materialize them under directory.
+         on_error: str = "raise",
+         symlink_policy: str = "skip") -> ScanResult:
+    """Discover descendants. Links are never followed.
 
-    Existing matching model children are reused. New resources are attached
-    through Directory.append_child(), updating an already-mounted tree index.
-    The scan is additive: it does not prune stale model children or delete
-    physical entries. Symlinks, reparse points and special entries are skipped.
+    symlink_policy="skip" (default) records and ignores links/reparse points;
+    "raise" aborts when one is encountered. Following descendant links is
+    deliberately unavailable because it conflicts with the provider's
+    logical-path mapping and root-confinement guarantees. A selected root
+    link can be resolved explicitly with resource_from_path(...,
+    follow_symlinks=True).
     """
     if not isinstance(directory, Directory):
         raise TypeError("directory must be a Directory")
@@ -42,6 +43,8 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
         raise TypeError("recursive must be a bool")
     if on_error not in {"raise", "skip"}:
         raise ValueError("on_error must be 'raise' or 'skip'")
+    if symlink_policy not in {"skip", "raise"}:
+        raise ValueError("symlink_policy must be 'skip' or 'raise'")
     if not isinstance(excluded_names, (set, frozenset)) or any(
         not isinstance(name, str) or not name for name in excluded_names
     ):
@@ -74,7 +77,10 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 attributes = getattr(info, "st_file_attributes", 0)
                 reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
                 if stat.S_ISLNK(info.st_mode) or attributes & reparse_flag:
-                    skipped.append((entry.path, "symbolic link or reparse point"))
+                    reason = "symbolic link or reparse point"
+                    if symlink_policy == "raise":
+                        raise ValueError(f"{reason}: {entry.path}")
+                    skipped.append((entry.path, reason))
                     continue
                 is_directory = stat.S_ISDIR(info.st_mode)
                 is_file = stat.S_ISREG(info.st_mode)
@@ -104,9 +110,12 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 if is_directory and recursive:
                     stack.append((resource, Path(entry.path)))
             except (OSError, ValueError, TypeError) as error:
+                if isinstance(error, ValueError) and symlink_policy == "raise":
+                    raise
                 if on_error == "raise":
                     raise
                 skipped.append((entry.path, str(error)))
     return ScanResult(directory=directory, discovered=tuple(discovered), skipped=tuple(skipped))
+
 
 __all__ = ["ScanResult", "scan"]
