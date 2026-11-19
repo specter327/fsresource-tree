@@ -133,11 +133,6 @@ def main() -> None:
                 assert not exists(archive, provider=provider)
                 print("  copied file and archive directory deleted")
 
-        finally:
-            # A failed assertion must not leave a provider holding resources.
-            if getattr(root, "filesystem_provider", None) is not None:
-                root.close_provider()
-
         print("\nAll public API demonstration steps completed.")
         print("The temporary physical filesystem will now be removed automatically.")
 
