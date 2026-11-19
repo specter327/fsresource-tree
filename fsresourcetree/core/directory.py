@@ -6,6 +6,7 @@ import threading
 from typing import Any
 
 from .resource_operations import FilesystemResourceOperations
+from .symbolic_link import SymbolicLink
 from resourcetree import Container
 
 
@@ -30,8 +31,8 @@ class Directory(FilesystemResourceOperations, Container):
 
     def _validate_attachment(self, resource) -> None:
         from .file import File
-        if not isinstance(resource, (Directory, File)):
-            raise TypeError("a Directory can contain only Directory or File resources")
+        if not isinstance(resource, (Directory, File, SymbolicLink)):
+            raise TypeError("a Directory can contain only Directory, File or SymbolicLink resources")
         super()._validate_attachment(resource)
 
     @classmethod
