@@ -146,7 +146,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
 
                 existing = next(
                     (child for child in current_model.children
-                     if (child.name if isinstance(child, Directory) else child.filename()) == name),
+                     if (child.name if isinstance(child, (Directory, SymbolicLink)) else child.filename()) == name),
                     None,
                 )
                 expected_type = Directory if is_directory else File
