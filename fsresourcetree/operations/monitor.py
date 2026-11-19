@@ -15,6 +15,7 @@ from typing import Callable
 
 from ..core.directory import Directory
 from ..core.file import File
+from ..core.symbolic_link import SymbolicLink
 from ..profile import PhysicalProfile
 
 _LOG = logging.getLogger(__name__)
@@ -85,7 +86,13 @@ def _resource_path(resource: Directory | File) -> str:
 def _walk(directory: Directory, *, recursive: bool) -> tuple[Directory | File, ...]:
     resources: list[Directory | File] = [directory]
     if not recursive:
-        return (directory, *directory.children)
+        # Symbolic links are terminal metadata resources, not monitorable
+        # filesystem objects: they intentionally expose no profile().
+        return (
+            directory,
+            *(child for child in directory.children
+              if not isinstance(child, SymbolicLink)),
+        )
     stack = list(reversed(directory.children))
     while stack:
         current = stack.pop()
