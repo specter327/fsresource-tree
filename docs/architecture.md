@@ -49,6 +49,29 @@ The diagram reflects the current public architecture. `LinuxProvider`, `TermuxPr
 
 Paths are inputs to validation and provider operations. Resource objects are the working model. A physical path is not the identity of a resource and should not be confused with its logical `Resource.path()`.
 
+## Hierarchy traversal and navigation
+
+Traversal is an in-memory model operation and must not trigger filesystem I/O.
+The generic core provides iterative depth-first traversal for a Resource,
+Container or ResourceTree. The filesystem specialization keeps its stricter
+resource-type validation while exposing the same preorder/postorder interface
+on Directory, File and FSResourceTree.
+
+- Preorder visits a resource before its descendants.
+- Postorder visits descendants before their parent and is suitable for
+  bottom-up processing such as calculating aggregate directory state.
+- Ancestor navigation follows parent links independently of descendant
+  traversal, either from the immediate parent toward the root or root-to-parent.
+- Multi-root trees preserve root order; sibling order is preserved within each
+  subtree.
+- ScanResult.walk() traverses the complete modeled subtree rooted at the
+  scanned directory. Its discovered tuple remains the scan delta only.
+
+All walkers are lazy and iterative. They validate parent/child consistency and
+reject cycles or duplicate references rather than silently producing partial
+results. The filesystem walker additionally rejects non-filesystem resource
+types in a directory hierarchy.
+
 ## 3. Virtual state and physical state
 
 Virtual and physical state are separate sources of truth. They may agree, differ, or exist independently.
