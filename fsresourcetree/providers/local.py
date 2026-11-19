@@ -112,7 +112,7 @@ class FilesystemProvider:
             metadata_fields.add("native_attributes")
         operations = {
             "create", "exists", "delete", "delete_tree", "purge",
-            "profile", "move", "copy_file", "create_exclusive",
+            "profile", "move", "copy_file", "create_exclusive", "scan_entries",
         }
         if self._supports_access_checks:
             operations.add("access")
@@ -242,6 +242,68 @@ class FilesystemProvider:
         if self._is_reparse_point(info):
             raise ValueError("symbolic links and reparse points are not traversable")
         return True
+
+    def scan_entries(self, directory: Directory) -> tuple[tuple[str, os.stat_result, str | None], ...]:
+        """Enumerate one modeled directory through the provider boundary.
+
+        POSIX enumeration is anchored to a pinned directory descriptor. Child
+        directories are opened with O_NOFOLLOW and checked against the observed
+        inode before being accepted. Windows retains the provider's documented
+        path-based validation limitations.
+        """
+        from ..core.directory import Directory
+
+        if not isinstance(directory, Directory):
+            raise TypeError("directory must be a Directory")
+        relative = self.relative_path(directory)
+        entries: list[tuple[str, os.stat_result, str | None]] = []
+
+        if self.race_resistant:
+            directory_fd = self._open_directory_fd(relative)
+            try:
+                for name in sorted(os.listdir(directory_fd), key=str.casefold):
+                    self._segment(name)
+                    info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    target = None
+                    if self._is_reparse_point(info):
+                        if stat.S_ISLNK(info.st_mode):
+                            target = os.readlink(name, dir_fd=directory_fd)
+                            current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                            if (current.st_dev, current.st_ino, current.st_mode) != (
+                                info.st_dev, info.st_ino, info.st_mode
+                            ):
+                                raise OSError(f"filesystem entry changed during scan: {name}")
+                    elif stat.S_ISDIR(info.st_mode):
+                        # O_PATH permits identity verification without requiring
+                        # read permission on the child directory. The directory will
+                        # be opened for enumeration only if recursion actually visits it.
+                        identity_flags = getattr(os, "O_PATH", os.O_RDONLY)
+                        child_fd = os.open(
+                            name,
+                            identity_flags | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW,
+                            dir_fd=directory_fd,
+                        )
+                        try:
+                            opened = os.fstat(child_fd)
+                            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                                raise OSError(f"filesystem entry changed during scan: {name}")
+                        finally:
+                            os.close(child_fd)
+                    entries.append((name, info, target))
+            finally:
+                os.close(directory_fd)
+            return tuple(entries)
+
+        # Windows currently uses path-based checks; this path is explicitly
+        # not represented as race-resistant by ProviderCapabilities.
+        directory_path = self.resolve(directory, allow_missing=False)
+        for name in sorted(os.listdir(directory_path), key=str.casefold):
+            self._segment(name)
+            path = directory_path / name
+            info = path.lstat()
+            target = os.readlink(path) if stat.S_ISLNK(info.st_mode) else None
+            entries.append((name, info, target))
+        return tuple(entries)
 
     def _listdir_relative(self, relative: Path) -> set[str]:
         if self._root_fd is None:

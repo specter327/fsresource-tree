@@ -120,6 +120,34 @@ The configured root is a security boundary. Providers must validate resource anc
 
 On POSIX, descriptor-relative operations prevent symlink substitution, but they are not an atomic transaction against concurrent renames of already-opened directories. If an untrusted actor can rename a traversed descendant (for example, `root/a/b`) outside the configured root after it has been opened, later create, delete or purge operations may act through that descriptor on the moved tree. The configured root, its ancestors, and every traversed parent/descendant directory must therefore be protected against hostile concurrent renames or mutations. The provider is not an OS sandbox. On Windows, path-based validation checks existing components for symbolic links and reparse points before create, delete and purge I/O, but cannot prevent a hostile concurrent replacement after validation. Full Windows handle-relative operations remain outside the current security claim.
 
+## Symbolic-link policy
+
+Symbolic links are explicit model resources, not aliases for their targets.
+`SymbolicLink` preserves the entry name and target returned by `os.readlink()`.
+On Windows, ordinary extended-length drive and UNC prefixes are normalized
+for a portable user-facing representation; other device namespaces are kept
+unchanged. It is terminal: scanning never descends through it,
+and the resource does not expose file/directory mutation operations.
+
+`Directory.scan(symlink_policy=...)` supports:
+
+- `skip` (default): omit symbolic links and record them in
+  `ScanResult.skipped`.
+- `accept`: attach a `SymbolicLink` resource without resolving
+  or traversing its destination. Reparse points that are not reported as
+  symbolic links remain skipped.
+- `raise`: raise when a symbolic link or reparse point is encountered.
+
+The selected root has a separate opt-in:
+`resource_from_path(path, follow_symlinks=True)` resolves the chosen
+root to its canonical target before configuring the provider. This does not
+change descendant policy.
+
+Following descendant links is not supported. It requires provider-level
+logical-to-physical alias mapping and race-resistant root confinement; checking
+`Path.resolve()` alone is not a security boundary. Until that provider
+work is implemented, no scan policy follows descendant links.
+
 ## 5. Operations and side effects
 
 Operations are explicit. Constructing a resource, attaching it to a Directory, registering it in an FSResourceTree, serializing it, or searching it must not change the physical filesystem.
@@ -142,7 +170,7 @@ Provider operations should validate/preflight before mutation where practical. T
 
 ## 6. Discovery, traversal and high-level operations
 
-The public `scan()` operation performs physical discovery and materializes File/Directory resources. It supports recursive or shallow scans, name/callback exclusions and configurable error handling. Symbolic links, reparse points and unsupported special entries are skipped. Matching existing resources are reused; new resources are attached to the model and any mounted tree index. The scan is additive: it does not prune stale model children or delete physical entries.
+The public `scan()` operation delegates physical enumeration to the configured provider through `scan_entries()`, then materializes File/Directory resources plus terminal SymbolicLink resources when requested. POSIX enumeration is anchored to the provider's pinned root and directory descriptors, uses no-follow metadata queries, and verifies opened child-directory identity. Windows currently retains path-based enumeration and its documented concurrent-replacement limitation; it is not represented as race-resistant. The scanner does not use `os.scandir()` on resolved paths. It supports recursive or shallow scans, name/callback exclusions and configurable error handling. Symbolic links and reparse points are never followed during descendant discovery. The scan policy is explicit: `symlink_policy="skip"` (default) records and skips them, `"accept"` materializes symbolic links without traversing their targets, and `"raise"` aborts. Unsupported special entries are skipped. Matching existing resources are reused; new resources are attached to the model and any mounted tree index. The scan is additive: it does not prune stale model children or delete physical entries.
 
 Model traversal, recursive iteration, search, filtering, grouping and analysis work over already materialized resource collections and the FSResourceTree index. They do not repeatedly query the filesystem. This separation avoids making every high-level operation an uncontrolled filesystem walk.
 
@@ -193,7 +221,7 @@ Native OS notification backends are not implemented.
 The following describes code that exists now, not the target architecture above.
 
 - Model: `File`, `Directory`, `FSResourceTree`; generic metadata and hierarchy; specialized dict/JSON/XML serialization.
-- Materialization: `validate_path()` and `resource_from_path()` classify and materialize one existing entry.
+- Materialization: `validate_path()` and `resource_from_path()` classify and materialize one existing entry. Both reject symbolic links by default; `resource_from_path(..., follow_symlinks=True)` explicitly resolves only the selected root path to its canonical target. This opt-in does not enable following descendant links.
 - Provider contract: structural `FilesystemProviderProtocol` and immutable per-instance `ProviderCapabilities`.
 - Provider selection: `ProviderLoader` detects GNU/Linux, Termux or Windows and instantiates `LinuxProvider`, `TermuxProvider` or `WindowsProvider`. These classes currently share the audited `FilesystemProvider` backend and enforce runtime compatibility; common operations are not duplicated without a demonstrated platform-specific need. Unsupported runtimes fail with `UnsupportedPlatformError`.
 - Provider lifecycle: a provider is explicitly configured with a physical root and logical Directory root; `resource_from_path()` uses the loader for top-level directories.

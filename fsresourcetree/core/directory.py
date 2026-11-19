@@ -6,6 +6,7 @@ import threading
 from typing import Any
 
 from .resource_operations import FilesystemResourceOperations
+from .symbolic_link import SymbolicLink
 from resourcetree import Container
 
 
@@ -30,8 +31,8 @@ class Directory(FilesystemResourceOperations, Container):
 
     def _validate_attachment(self, resource) -> None:
         from .file import File
-        if not isinstance(resource, (Directory, File)):
-            raise TypeError("a Directory can contain only Directory or File resources")
+        if not isinstance(resource, (Directory, File, SymbolicLink)):
+            raise TypeError("a Directory can contain only Directory or File resources, plus terminal SymbolicLink resources")
         super()._validate_attachment(resource)
 
     @classmethod
@@ -55,6 +56,7 @@ class Directory(FilesystemResourceOperations, Container):
         excluded_names: set[str] | frozenset[str] = frozenset(),
         exclude=None,
         on_error: str = "raise",
+        symlink_policy: str = "skip",
     ):
         from ..operations.scan import scan
         return scan(
@@ -64,6 +66,7 @@ class Directory(FilesystemResourceOperations, Container):
             excluded_names=excluded_names,
             exclude=exclude,
             on_error=on_error,
+            symlink_policy=symlink_policy,
         )
 
     def purge(self) -> bool:

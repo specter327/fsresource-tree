@@ -383,3 +383,29 @@ def test_type_replacement_stops_monitors_in_replaced_directory_subtree(tmp_path)
         stale.disable_monitor()
         nested.disable_monitor()
         provider.close()
+
+
+def test_monitor_shallow_snapshot_ignores_accepted_symbolic_links(tmp_path):
+    from fsresourcetree import SymbolicLink
+
+    physical, root, provider = make_root(tmp_path)
+    target = tmp_path / "target.txt"
+    target.touch()
+    link = physical / "alias.txt"
+    try:
+        link.symlink_to(target)
+    except (NotImplementedError, OSError) as error:
+        provider.close()
+        pytest.skip(f"symbolic links are unavailable in this environment: {error}")
+
+    try:
+        root.scan(recursive=False, symlink_policy="accept")
+        assert any(isinstance(child, SymbolicLink) for child in root.children)
+
+        monitor = root.enable_monitor(interval=60, recursive=False)
+        assert monitor.running
+        assert set(item[0] for item in monitor._snapshot.values()) == {root}
+        assert monitor._poll_once() == ()
+    finally:
+        root.disable_monitor()
+        provider.close()
