@@ -86,7 +86,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 is_symlink = stat.S_ISLNK(info.st_mode)
                 is_reparse_point = bool(attributes & reparse_flag)
                 if is_symlink or is_reparse_point:
-                    reason = "symbolic link" if is_symlink else "filesystem reparse point"
+                    reason = "symbolic link or reparse point"
                     if symlink_policy == "raise":
                         raise _SymlinkPolicyError(f"{reason}: {entry.path}")
                     if symlink_policy == "accept" and is_symlink:
