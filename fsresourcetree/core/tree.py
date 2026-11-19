@@ -30,7 +30,7 @@ class FSResourceTree(ResourceTree):
     def _validate_node(self, resource) -> None:
         if not isinstance(resource, (Directory, File, SymbolicLink)):
             raise TypeError(
-                "filesystem trees can contain only Directory, File or SymbolicLink resources"
+                "filesystem trees can contain only Directory or File resources, plus terminal SymbolicLink resources"
             )
 
     def add_roots(self, resources: Iterable[Directory]) -> tuple[Directory, ...]:
