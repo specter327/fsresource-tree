@@ -49,6 +49,11 @@ class File(FilesystemResourceOperations, Asset):
     def physical_profile(self):
         return getattr(self, "_physical_profile", None)
 
+    def walk(self, *, order: str = "pre"):
+        """Iterate this file as a terminal resource."""
+        from ..operations.walker import walk
+        return walk(self, order=order)
+
     def profile(self, *, update_cache: bool = False):
         from ..operations.profile import profile
         return profile(self, provider=self._require_provider(), update_cache=update_cache)
