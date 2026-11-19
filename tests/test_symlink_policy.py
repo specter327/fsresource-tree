@@ -177,3 +177,23 @@ def test_windows_symlink_target_normalization():
     device_path = r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\target"
     assert _normalize_symlink_target(device_path, windows=True) == device_path
     assert _normalize_symlink_target(r"\\?\C:\folder\target", windows=False) == r"\\?\C:\folder\target"
+
+
+
+def test_scan_uses_provider_enumeration_instead_of_path_scandir(tmp_path, monkeypatch):
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    (root_path / "nested").mkdir()
+    (root_path / "nested" / "item.txt").write_text("content")
+
+    root = resource_from_path(root_path)
+    try:
+        def forbidden_scandir(*args, **kwargs):
+            raise AssertionError("scan must enumerate through the provider")
+
+        monkeypatch.setattr("os.scandir", forbidden_scandir)
+        result = root.scan(recursive=True)
+        assert result.count == 2
+        assert any(isinstance(child, Directory) and child.name == "nested" for child in root.children)
+    finally:
+        root.close_provider()
