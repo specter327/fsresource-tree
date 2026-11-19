@@ -49,6 +49,18 @@ class ScanResult:
     def count(self) -> int:
         return len(self.discovered)
 
+    def walk(self, *, order: str = "pre"):
+        """Traverse the resulting model beneath the scanned directory.
+
+        This includes pre-existing modeled resources as well as resources
+        discovered by this scan. Use discovered for the scan's delta only.
+        """
+        return self.directory.walk(order=order)
+
+    def ancestors(self, *, include_self: bool = False, order: str = "up"):
+        """Navigate from the scanned directory toward its parent directories."""
+        return self.directory.ancestors(include_self=include_self, order=order)
+
 
 def _existing_child(directory: Directory, name: str):
     """Find a modeled child using its physical filename representation."""
