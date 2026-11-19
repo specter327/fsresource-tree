@@ -142,7 +142,7 @@ Provider operations should validate/preflight before mutation where practical. T
 
 ## 6. Discovery, traversal and high-level operations
 
-The public `scan()` operation performs physical discovery and materializes File/Directory resources. It supports recursive or shallow scans, name/callback exclusions and configurable error handling. Symbolic links, reparse points and unsupported special entries are skipped. Matching existing resources are reused; new resources are attached to the model and any mounted tree index. The scan is additive: it does not prune stale model children or delete physical entries.
+The public `scan()` operation performs physical discovery and materializes File/Directory resources. It supports recursive or shallow scans, name/callback exclusions and configurable error handling. Symbolic links and reparse points are never followed during descendant discovery. The scan policy is explicit: `symlink_policy="skip"` (default) records and skips them, while `symlink_policy="raise"` aborts. Unsupported special entries are skipped. Matching existing resources are reused; new resources are attached to the model and any mounted tree index. The scan is additive: it does not prune stale model children or delete physical entries.
 
 Model traversal, recursive iteration, search, filtering, grouping and analysis work over already materialized resource collections and the FSResourceTree index. They do not repeatedly query the filesystem. This separation avoids making every high-level operation an uncontrolled filesystem walk.
 
@@ -193,7 +193,7 @@ Native OS notification backends are not implemented.
 The following describes code that exists now, not the target architecture above.
 
 - Model: `File`, `Directory`, `FSResourceTree`; generic metadata and hierarchy; specialized dict/JSON/XML serialization.
-- Materialization: `validate_path()` and `resource_from_path()` classify and materialize one existing entry.
+- Materialization: `validate_path()` and `resource_from_path()` classify and materialize one existing entry. Both reject symbolic links by default; `resource_from_path(..., follow_symlinks=True)` explicitly resolves only the selected root path to its canonical target. This opt-in does not enable following descendant links.
 - Provider contract: structural `FilesystemProviderProtocol` and immutable per-instance `ProviderCapabilities`.
 - Provider selection: `ProviderLoader` detects GNU/Linux, Termux or Windows and instantiates `LinuxProvider`, `TermuxProvider` or `WindowsProvider`. These classes currently share the audited `FilesystemProvider` backend and enforce runtime compatibility; common operations are not duplicated without a demonstrated platform-specific need. Unsupported runtimes fail with `UnsupportedPlatformError`.
 - Provider lifecycle: a provider is explicitly configured with a physical root and logical Directory root; `resource_from_path()` uses the loader for top-level directories.
