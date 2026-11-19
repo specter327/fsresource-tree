@@ -8,6 +8,7 @@ from .operations import (
 from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
+from .core.symbolic_link import SymbolicLink
 from .core.tree import FSResourceTree
 from .factory import FilesystemResourceType, resource_from_path, validate_path
 from .providers import (
@@ -31,6 +32,7 @@ __version__ = "0.4.0"
 __all__ = [
     "Resource",
     "File",
+    "SymbolicLink",
     "Directory",
     "FSResourceTree",
     "FilesystemProvider",
