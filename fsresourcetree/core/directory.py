@@ -45,6 +45,18 @@ class Directory(FilesystemResourceOperations, Container):
     def physical_profile(self):
         return getattr(self, "_physical_profile", None)
 
+    def walk(self, *, order: str = "pre"):
+        """Iterate this directory and its descendants in preorder or postorder."""
+        from ..operations.walker import walk
+        return walk(self, order=order)
+
+    def ancestors(self, *, include_self: bool = False, order: str = "up"):
+        """Iterate parent directories from the immediate parent toward the root."""
+        if order not in {"up", "down"}:
+            raise ValueError("order must be 'up' or 'down'")
+        from ..operations.ancestors import ancestors
+        return ancestors(self, include_self=include_self, inverse=(order == "up"))
+
     def profile(self, *, update_cache: bool = False):
         from ..operations.profile import profile
         return profile(self, provider=self._require_provider(), update_cache=update_cache)

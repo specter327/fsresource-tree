@@ -12,12 +12,28 @@ from ..core.symbolic_link import SymbolicLink
 Resource = Directory | File | SymbolicLink
 
 
-def walk(resource: Resource, inverse: bool = False) -> Iterator[Resource]:
-    """Traverse a subtree iteratively; inverse=True yields post-order."""
+def walk(
+    resource: Resource,
+    inverse: bool = False,
+    *,
+    order: str | None = None,
+) -> Iterator[Resource]:
+    """Traverse iteratively in preorder or postorder.
+
+    The legacy inverse flag remains supported. The order keyword accepts
+    'pre'/'preorder' and 'post'/'postorder'.
+    """
     if not isinstance(resource, (Directory, File, SymbolicLink)):
         raise TypeError("resource must be a Directory, File or SymbolicLink")
     if not isinstance(inverse, bool):
         raise TypeError("inverse must be a bool")
+    if order is not None:
+        if order not in {"pre", "preorder", "post", "postorder"}:
+            raise ValueError("order must be 'pre' or 'post'")
+        requested_inverse = order in {"post", "postorder"}
+        if inverse and not requested_inverse:
+            raise ValueError("inverse=True conflicts with order='pre'")
+        inverse = requested_inverse
     if resource.parent is not None:
         if not isinstance(resource.parent, Directory):
             raise TypeError("filesystem resource parents must be Directory instances")

@@ -47,6 +47,12 @@ class FSResourceTree(ResourceTree):
             raise TypeError("filesystem resource parent must be a Directory")
         return super().register(resource, parent)
 
+    def walk(self, *, order: str = "pre"):
+        """Iterate all filesystem roots and descendants in preorder or postorder."""
+        from ..operations.walker import walk
+        for root in self.roots:
+            yield from walk(root, order=order)
+
     def mount(self, entrypoint: Directory, tree: ResourceTree) -> tuple[Directory, ...]:
         if not isinstance(entrypoint, Directory):
             raise TypeError("filesystem mount entrypoint must be a Directory")
