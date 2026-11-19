@@ -12,6 +12,28 @@ from ..factory import resource_from_path
 from ..providers import FilesystemProviderProtocol, require_provider_operation
 
 
+def _normalize_symlink_target(target: str, *, windows: bool | None = None) -> str:
+    """Remove Win32 extended-length prefixes from ordinary drive and UNC paths.
+
+    os.readlink may expose the \\\\?\\ namespace prefix on Windows. It is an
+    API detail rather than part of the user-facing link target. Keep other
+    device namespaces untouched because stripping their prefix changes meaning.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return target
+    if target.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + target[8:]
+    if (
+        len(target) >= 7
+        and target.startswith("\\\\?\\")
+        and target[4].isalpha()
+        and target[5:7] == ":\\"
+    ):
+        return target[4:]
+    return target
+
 class _SymlinkPolicyError(ValueError):
     """Raised when the configured symlink policy rejects an entry."""
 
@@ -95,7 +117,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                              if child.name == entry.name),
                             None,
                         )
-                        target = os.readlink(entry.path)
+                        target = _normalize_symlink_target(os.readlink(entry.path))
                         if existing is not None:
                             if not isinstance(existing, SymbolicLink) or existing.target != target:
                                 raise TypeError(f"model/physical type conflict at {entry.path!r}")
