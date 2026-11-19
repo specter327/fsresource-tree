@@ -67,6 +67,41 @@ The content boundary excludes APIs for reading, writing, appending, overwriting,
 
 The generic `Asset.data` field inherited by `File` is an in-memory model payload only. It is not connected to physical file contents. Applications that need physical content I/O must do so independently, using Python's standard `open()` function and its file objects / I/O wrappers (`IOWrapper`). Those workflows are outside the responsibility of `fsresourcetree`.
 
+## Traversal and navigation
+
+Filesystem resources expose the same object-oriented traversal entry points:
+
+```python
+# Directory subtree, parent before descendants.
+for resource in directory.walk():
+    ...
+
+# Bottom-up processing: files and nested directories before their parents.
+for resource in directory.walk(order="post"):
+    ...
+
+# Navigate from a file's containing directory toward the filesystem root.
+for parent in file.ancestors():
+    ...
+
+# A tree may contain several independent directory roots.
+for resource in resource_tree.walk(order="post"):
+    ...
+
+# ScanResult traverses the resulting modeled subtree.
+result = directory.scan()
+for resource in result.walk(order="post"):
+    ...
+```
+
+The explicit `order` values are `"pre"` and `"post"` (also
+`"preorder"` and `"postorder"`). The legacy
+`fsresourcetree.operations.walk(resource, inverse=True)` form remains
+supported. `ScanResult.discovered` and `ScanResult.count` continue to
+represent only the resources newly discovered by that scan; `ScanResult.walk()`
+traverses the complete in-memory subtree under the scanned directory, including
+resources that were already modeled.
+
 ## Providers and supported platforms
 
 Filesystem-specific behavior belongs to providers rather than a forced uniform abstraction. Operation services consume the structural `FilesystemProviderProtocol`, whose minimal contract is an immutable `ProviderCapabilities` declaration. Each operation is checked independently against the provider's declared capabilities and callable method; unsupported requests raise `UnsupportedOperationError`. Providers need not implement unrelated operations. Capabilities report runtime platform, known filesystem format, race-resistance guarantee, supported operations and metadata fields.
