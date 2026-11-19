@@ -142,12 +142,9 @@ Provider operations should validate/preflight before mutation where practical. T
 
 ## 6. Discovery, traversal and high-level operations
 
-There are two distinct workflows:
+The public `scan()` operation performs physical discovery and materializes File/Directory resources. It supports recursive or shallow scans, name/callback exclusions and configurable error handling. Symbolic links, reparse points and unsupported special entries are skipped. Matching existing resources are reused; new resources are attached to the model and any mounted tree index. The scan is additive: it does not prune stale model children or delete physical entries.
 
-1. **Physical discovery:** a provider enumerates the filesystem and returns entry information. A scan operation converts those observations into File/Directory objects and updates the selected model/tree according to an explicit reconciliation policy.
-2. **Model operations:** traversal, recursive iteration, search, filtering, grouping and analysis work over already materialized resource collections and the FSResourceTree index. They do not repeatedly query the filesystem.
-
-This separation avoids making every high-level operation an uncontrolled filesystem walk. A scan can be expensive and must make its recursion, exclusions, link handling, error policy and model-update behavior explicit.
+Model traversal, recursive iteration, search, filtering, grouping and analysis work over already materialized resource collections and the FSResourceTree index. They do not repeatedly query the filesystem. This separation avoids making every high-level operation an uncontrolled filesystem walk.
 
 ## 7. Metadata and access decisions
 
