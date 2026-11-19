@@ -7,6 +7,8 @@ from fsresourcetree import (
     TermuxProvider,
     UnsupportedPlatformError,
     WindowsProvider,
+    resource_from_path,
+    detect_runtime_platform,
 )
 
 
@@ -58,3 +60,19 @@ def test_platform_specific_provider_rejects_mismatched_runtime(tmp_path):
         other(root_path, resource_root=logical_root)
 
     assert logical_root.filesystem_provider is None
+
+
+
+def test_runtime_detection_identifies_termux(monkeypatch):
+    monkeypatch.setenv("TERMUX_VERSION", "0.118.0")
+    assert detect_runtime_platform() == "termux"
+
+
+def test_resource_from_path_uses_the_runtime_loader(tmp_path):
+    root_path = tmp_path / "workspace"
+    root_path.mkdir()
+
+    resource = resource_from_path(root_path)
+
+    assert isinstance(resource.filesystem_provider, ProviderLoader.provider_class())
+    resource.close_provider()
