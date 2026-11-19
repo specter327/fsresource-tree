@@ -120,3 +120,47 @@ def test_symlink_raise_policy_preserves_on_error_skip_for_callback_errors(tmp_pa
         assert result.skipped == ((str(root_path / "item.txt"), "callback rejected entry"),)
     finally:
         root.close_provider()
+
+def test_scan_accepts_symbolic_links_without_traversing_targets(tmp_path):
+    from fsresourcetree import SymbolicLink
+
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "secret.txt").write_text("content")
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    link = root_path / "alias"
+    _symlink_or_skip(link, target, target_is_directory=True)
+
+    root = resource_from_path(root_path)
+    try:
+        result = root.scan(recursive=True, symlink_policy="accept")
+        accepted = [child for child in root.children if isinstance(child, SymbolicLink)]
+        assert len(accepted) == 1
+        assert accepted[0].name == "alias"
+        assert accepted[0].target == str(target)
+        assert result.count == 1
+        assert not any(child.name == "secret.txt" for child in root.children)
+    finally:
+        root.close_provider()
+
+
+def test_symbolic_link_resource_round_trips_through_model(tmp_path):
+    from fsresourcetree import SymbolicLink
+
+    target = tmp_path / "target.txt"
+    target.write_text("content")
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    _symlink_or_skip(root_path / "alias.txt", target)
+
+    root = resource_from_path(root_path)
+    try:
+        root.scan(symlink_policy="accept")
+        payload = root.to_dict()
+        restored = Directory.from_dict(payload)
+        links = [child for child in restored.children if isinstance(child, SymbolicLink)]
+        assert len(links) == 1
+        assert links[0].target == str(target)
+    finally:
+        root.close_provider()
