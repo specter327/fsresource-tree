@@ -45,6 +45,11 @@ class Directory(FilesystemResourceOperations, Container):
     def physical_profile(self):
         return getattr(self, "_physical_profile", None)
 
+    def walk(self, *, order: str = "pre"):
+        """Iterate this directory and its descendants in preorder or postorder."""
+        from ..operations.walker import walk
+        return walk(self, order=order)
+
     def profile(self, *, update_cache: bool = False):
         from ..operations.profile import profile
         return profile(self, provider=self._require_provider(), update_cache=update_cache)
