@@ -99,3 +99,24 @@ def test_follow_symlinks_is_only_valid_for_selected_root(tmp_path):
             parent=Directory(name="parent"),
             follow_symlinks=True,
         )
+
+def test_symlink_raise_policy_preserves_on_error_skip_for_callback_errors(tmp_path):
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    (root_path / "item.txt").write_text("content")
+
+    root = resource_from_path(root_path)
+    try:
+        def reject_entry(name, is_directory):
+            raise ValueError("callback rejected entry")
+
+        result = root.scan(
+            recursive=True,
+            exclude=reject_entry,
+            symlink_policy="raise",
+            on_error="skip",
+        )
+        assert result.count == 0
+        assert result.skipped == ((str(root_path / "item.txt"), "callback rejected entry"),)
+    finally:
+        root.close_provider()
