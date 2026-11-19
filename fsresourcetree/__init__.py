@@ -10,7 +10,11 @@ from .core.directory import Directory
 from .core.file import File
 from .core.tree import FSResourceTree
 from .factory import FilesystemResourceType, resource_from_path, validate_path
-from .providers import FilesystemProvider, FilesystemProviderProtocol, ProviderCapabilities
+from .providers import (
+    FilesystemProvider, FilesystemProviderProtocol, ProviderCapabilities,
+    LinuxProvider, TermuxProvider, WindowsProvider, ProviderLoader,
+    detect_runtime_platform,
+)
 from .profile import PhysicalProfile
 from .exceptions import (
     InvalidParentError,
@@ -30,6 +34,11 @@ __all__ = [
     "Directory",
     "FSResourceTree",
     "FilesystemProvider",
+    "LinuxProvider",
+    "TermuxProvider",
+    "WindowsProvider",
+    "ProviderLoader",
+    "detect_runtime_platform",
     "FilesystemProviderProtocol",
     "ProviderCapabilities",
     "PhysicalProfile",
