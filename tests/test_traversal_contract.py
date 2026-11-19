@@ -35,7 +35,7 @@ def test_walk_rejects_non_filesystem_children():
     root = Directory("root")
     root._children.append(object())
 
-    with pytest.raises(TypeError, match="only Directory or File"):
+    with pytest.raises(TypeError, match="only Directory, File or SymbolicLink"):
         list(walk(root))
 
 
