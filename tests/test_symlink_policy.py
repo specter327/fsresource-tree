@@ -255,3 +255,65 @@ def test_scan_uses_provider_enumeration_instead_of_path_scandir(tmp_path, monkey
         assert any(isinstance(child, Directory) and child.name == "nested" for child in root.children)
     finally:
         root.close_provider()
+
+
+def test_walk_includes_accepted_symbolic_links_as_terminal_resources(tmp_path):
+    from fsresourcetree import SymbolicLink
+    from fsresourcetree.operations.walker import walk
+
+    target = tmp_path / "target.txt"
+    target.write_text("content")
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    _symlink_or_skip(root_path / "alias.txt", target)
+
+    root = resource_from_path(root_path)
+    try:
+        root.scan(symlink_policy="accept")
+        links = [resource for resource in walk(root) if isinstance(resource, SymbolicLink)]
+        assert len(links) == 1
+        assert links[0].name == "alias.txt"
+        assert list(walk(links[0])) == links
+    finally:
+        root.close_provider()
+
+
+def test_scan_detects_file_replaced_by_accepted_symlink(tmp_path):
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    item = root_path / "item.txt"
+    item.write_text("original")
+    target = tmp_path / "target.txt"
+    target.write_text("target")
+
+    root = resource_from_path(root_path)
+    try:
+        root.scan()
+        item.unlink()
+        _symlink_or_skip(item, target)
+        with pytest.raises(TypeError, match="model/physical type conflict"):
+            root.scan(symlink_policy="accept")
+        assert len(root.children) == 1
+    finally:
+        root.close_provider()
+
+
+def test_scan_applies_excluded_names_to_accepted_symbolic_links(tmp_path):
+    from fsresourcetree import SymbolicLink
+
+    target = tmp_path / "target.txt"
+    target.write_text("content")
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    _symlink_or_skip(root_path / "excluded-link", target)
+
+    root = resource_from_path(root_path)
+    try:
+        result = root.scan(symlink_policy="accept", excluded_names={"excluded-link"})
+        assert result.count == 0
+        assert not any(isinstance(child, SymbolicLink) for child in root.children)
+        assert result.skipped == (
+            (str(root_path / "excluded-link"), "excluded by scan policy"),
+        )
+    finally:
+        root.close_provider()
