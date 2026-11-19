@@ -55,6 +55,7 @@ class Directory(FilesystemResourceOperations, Container):
         excluded_names: set[str] | frozenset[str] = frozenset(),
         exclude=None,
         on_error: str = "raise",
+        symlink_policy: str = "skip",
     ):
         from ..operations.scan import scan
         return scan(
@@ -64,6 +65,7 @@ class Directory(FilesystemResourceOperations, Container):
             excluded_names=excluded_names,
             exclude=exclude,
             on_error=on_error,
+            symlink_policy=symlink_policy,
         )
 
     def purge(self) -> bool:
