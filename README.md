@@ -69,7 +69,9 @@ The generic `Asset.data` field inherited by `File` is an in-memory model payload
 
 ## Providers and supported platforms
 
-Filesystem-specific behavior belongs to specialized providers rather than a forced uniform abstraction. The current provider abstraction is structural: operation services consume `FilesystemProviderProtocol`, whose minimal contract is an immutable `ProviderCapabilities` declaration. Each operation is checked independently against the provider's declared capabilities and callable method; unsupported requests raise `UnsupportedOperationError`. Providers are not required to implement unrelated operations. Capabilities report runtime platform, known filesystem format, race-resistance guarantee, supported operations and metadata fields. The intended platform implementations include `LinuxProvider`, `TermuxProvider`, `WindowsProvider` and may admit additional implementations such as `MacOSProvider`, selected through a dynamic provider loader. This architecture is documented as the target; the current code still has one `FilesystemProvider` implementation and no dynamic loader.
+Filesystem-specific behavior belongs to providers rather than a forced uniform abstraction. Operation services consume the structural `FilesystemProviderProtocol`, whose minimal contract is an immutable `ProviderCapabilities` declaration. Each operation is checked independently against the provider's declared capabilities and callable method; unsupported requests raise `UnsupportedOperationError`. Providers need not implement unrelated operations. Capabilities report runtime platform, known filesystem format, race-resistance guarantee, supported operations and metadata fields.
+
+The runtime selector is `ProviderLoader`. It detects GNU/Linux, Termux or Windows and instantiates `LinuxProvider`, `TermuxProvider` or `WindowsProvider`; unsupported runtimes raise `UnsupportedPlatformError`. The platform classes currently share the audited `FilesystemProvider` implementation and apply explicit runtime guards. This avoids duplicating common filesystem behavior before a real platform-specific semantic difference requires it. Termux is identified separately but reuses POSIX primitives. The loader selects by operating-system runtime, never by filesystem format.
 
 The required compatibility targets are:
 
@@ -132,7 +134,7 @@ Physical providers are bound once to a physical Directory root. Instance methods
 ```python
 from fsresourcetree import File, resource_from_path
 
-root = resource_from_path("/srv/workspace")  # creates and binds its local provider
+root = resource_from_path("/srv/workspace")  # ProviderLoader selects the runtime provider
 report = File("report", extension="txt", parent=root)
 
 report.create()
@@ -215,3 +217,19 @@ Packages are published manually by the maintainer; this repository does not publ
 ## Provider security limitations
 
 On POSIX, descriptor-relative operations prevent symlink substitution, but they are not an atomic transaction against concurrent renames of already-opened directories. If an untrusted actor can rename a traversed descendant (for example, `root/a/b`) outside the configured root after it has been opened, later create, delete or purge operations may act through that descriptor on the moved tree. The configured root, its ancestors, and every traversed parent/descendant directory must therefore be protected against hostile concurrent renames or mutations. The provider is not an OS sandbox. On Windows, path-based validation checks existing components for symbolic links and reparse points before create, delete and purge I/O, but cannot prevent a hostile concurrent replacement after validation. Full Windows handle-relative operations remain outside the current security claim.
+
+
+## Provider selection
+
+For an existing physical directory, `resource_from_path()` automatically uses `ProviderLoader`. Manual roots can use the same loader explicitly:
+
+```python
+from fsresourcetree import Directory, ProviderLoader
+
+root = Directory("workspace")
+provider = ProviderLoader.load("/srv/workspace", resource_root=root)
+print(provider.capabilities)
+root.close_provider()
+```
+
+Use `ProviderLoader.provider_class("linux")` to inspect the registered implementation for a known runtime identifier, or `ProviderLoader.supported_platforms()` to list supported identifiers. The optional platform argument to `provider_class` is for class inspection; `load()` always detects the actual runtime. See [provider selection and extension](docs/providers.md) for lifecycle, compatibility and extension rules.
