@@ -32,7 +32,7 @@ def test_directory_executable_means_search_access(tmp_path):
     root = Directory("root")
     workspace = Directory("workspace", parent=root)
 
-    with FilesystemProvider(physical, resource_root=root):
+    with FilesystemProvider(physical, resource_root=root) as provider:
         _require_access(provider)
         assert workspace.readable()
         assert workspace.writable()
