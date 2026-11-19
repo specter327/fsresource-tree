@@ -1,10 +1,10 @@
 """Filesystem specialization built on top of the generic resourcetree core."""
-
 from . import operations, renderers
 from .operations import (
-    FilesystemChangeEvent, FilesystemChangeType, PollingMonitor,
-    ScanResult, copy, executable, move, readable, rename, scan, writable,
+    FilesystemChangeEvent, FilesystemChangeType, PollingMonitor, ScanResult,
+    copy, executable, filter_tree, find, move, readable, rename, scan, writable,
 )
+from .format_types import FormatTypes, FORMAT_EXTENSIONS, extensions_for
 from resourcetree import Resource
 from .core.directory import Directory
 from .core.file import File
@@ -13,58 +13,26 @@ from .core.tree import FSResourceTree
 from .factory import FilesystemResourceType, resource_from_path, validate_path
 from .providers import (
     FilesystemProvider, FilesystemProviderProtocol, ProviderCapabilities,
-    LinuxProvider, TermuxProvider, WindowsProvider, ProviderLoader,
-    detect_runtime_platform,
+    LinuxProvider, TermuxProvider, WindowsProvider, ProviderLoader, detect_runtime_platform,
 )
 from .profile import PhysicalProfile
 from .exceptions import (
-    InvalidParentError,
-    ResourceAlreadyRegisteredError,
-    UnsupportedOperationError,
-    ProviderNotConfiguredError,
-    UnsupportedPlatformError,
-    ResourceNotFoundError,
+    InvalidParentError, ResourceAlreadyRegisteredError, UnsupportedOperationError,
+    ProviderNotConfiguredError, UnsupportedPlatformError, ResourceNotFoundError,
     ResourceTreeError,
 )
 
 __version__ = "0.4.0"
-
 __all__ = [
-    "Resource",
-    "File",
-    "SymbolicLink",
-    "Directory",
-    "FSResourceTree",
-    "FilesystemProvider",
-    "LinuxProvider",
-    "TermuxProvider",
-    "WindowsProvider",
-    "ProviderLoader",
-    "detect_runtime_platform",
-    "FilesystemProviderProtocol",
-    "ProviderCapabilities",
-    "PhysicalProfile",
-    "FilesystemResourceType",
-    "resource_from_path",
-    "validate_path",
-    "operations",
-    "scan",
-    "readable",
-    "writable",
-    "executable",
-    "copy",
-    "move",
-    "rename",
-    "ScanResult",
-    "FilesystemChangeEvent",
-    "FilesystemChangeType",
-    "PollingMonitor",
-    "renderers",
-    "ResourceTreeError",
-    "ResourceNotFoundError",
-    "ResourceAlreadyRegisteredError",
-    "InvalidParentError",
-    "UnsupportedOperationError",
-    "ProviderNotConfiguredError",
+    "Resource", "File", "SymbolicLink", "Directory", "FSResourceTree",
+    "FilesystemProvider", "LinuxProvider", "TermuxProvider", "WindowsProvider",
+    "ProviderLoader", "detect_runtime_platform", "FilesystemProviderProtocol",
+    "ProviderCapabilities", "PhysicalProfile", "FilesystemResourceType",
+    "resource_from_path", "validate_path", "operations", "scan", "readable",
+    "writable", "executable", "copy", "move", "rename", "find", "filter_tree",
+    "FormatTypes", "FORMAT_EXTENSIONS", "extensions_for", "ScanResult",
+    "FilesystemChangeEvent", "FilesystemChangeType", "PollingMonitor", "renderers",
+    "ResourceTreeError", "ResourceNotFoundError", "ResourceAlreadyRegisteredError",
+    "InvalidParentError", "UnsupportedOperationError", "ProviderNotConfiguredError",
     "UnsupportedPlatformError",
 ]
