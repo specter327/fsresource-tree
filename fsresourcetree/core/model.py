@@ -51,7 +51,7 @@ def validate_resource_payload(
         seen_objects.add(identity)
 
         kind = node.get("type")
-        if not isinstance(kind, str) or kind not in {"directory", "file"}:
+        if not isinstance(kind, str) or kind not in {"directory", "file", "symbolic_link"}:
             raise ValueError(f"unknown filesystem resource type: {kind!r}")
         if is_root and kind not in allowed_root_types:
             expected = ", ".join(repr(item) for item in allowed_root_types)
@@ -71,12 +71,18 @@ def validate_resource_payload(
                 if not isinstance(child, dict):
                     raise TypeError("serialized child resources must be dictionaries")
                 stack.append((child, False))
-        else:
+        elif kind == "file":
             extension = node.get("extension")
             if extension is not None and not isinstance(extension, str):
                 raise TypeError("file extension must be a string or None")
             if "children" in node:
                 raise ValueError("file resources cannot contain children")
+        else:
+            target = node.get("target")
+            if not isinstance(target, str) or not target:
+                raise ValueError("symbolic-link target must be a non-empty string")
+            if "children" in node or "extension" in node:
+                raise ValueError("symbolic links cannot contain children or file extensions")
 
 
 def validate_tree_payload(data: dict[str, Any], tree_type: str) -> None:
@@ -114,8 +120,9 @@ def _resource_from_validated_dict(data: dict[str, Any]):
     """Materialize a validated hierarchy in post-order without Python recursion."""
     from .directory import Directory
     from .file import File
+    from .symbolic_link import SymbolicLink
 
-    built: dict[int, Directory | File] = {}
+    built: dict[int, Directory | File | SymbolicLink] = {}
     stack: list[tuple[dict[str, Any], bool]] = [(data, False)]
     while stack:
         node, expanded = stack.pop()
@@ -129,6 +136,14 @@ def _resource_from_validated_dict(data: dict[str, Any]):
             resource = File(
                 name=node["name"],
                 extension=node.get("extension"),
+                uid=node["uid"],
+                metadata=node.get("metadata"),
+                data=node.get("data"),
+            )
+        elif node["type"] == "symbolic_link":
+            resource = SymbolicLink(
+                name=node["name"],
+                target=node["target"],
                 uid=node["uid"],
                 metadata=node.get("metadata"),
                 data=node.get("data"),
