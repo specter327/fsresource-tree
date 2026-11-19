@@ -11,6 +11,10 @@ from ..factory import resource_from_path
 from ..providers import FilesystemProviderProtocol, require_provider_operation
 
 
+class _SymlinkPolicyError(ValueError):
+    """Raised when the configured symlink policy rejects an entry."""
+
+
 @dataclass(frozen=True, slots=True)
 class ScanResult:
     """Immutable summary of one physical directory scan."""
@@ -79,7 +83,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 if stat.S_ISLNK(info.st_mode) or attributes & reparse_flag:
                     reason = "symbolic link or reparse point"
                     if symlink_policy == "raise":
-                        raise ValueError(f"{reason}: {entry.path}")
+                        raise _SymlinkPolicyError(f"{reason}: {entry.path}")
                     skipped.append((entry.path, reason))
                     continue
                 is_directory = stat.S_ISDIR(info.st_mode)
@@ -110,7 +114,7 @@ def scan(directory: Directory, *, provider: FilesystemProviderProtocol,
                 if is_directory and recursive:
                     stack.append((resource, Path(entry.path)))
             except (OSError, ValueError, TypeError) as error:
-                if isinstance(error, ValueError) and symlink_policy == "raise":
+                if isinstance(error, _SymlinkPolicyError):
                     raise
                 if on_error == "raise":
                     raise
