@@ -17,6 +17,7 @@ def test_public_exports_are_importable():
         "Resource",
         "File",
         "Directory",
+        "SymbolicLink",
         "FSResourceTree",
         "FilesystemProvider",
         "LinuxProvider",
